@@ -2,8 +2,8 @@
 # Removes what install.sh installed. Packages (wvkbd, ydotool, jq) are left.
 set -uo pipefail
 "$HOME/.local/bin/tablet-mode" bar-colors clear 2>/dev/null || true   # give the bar its own colours back
-systemctl --user disable --now tablet-gestures.service tablet-mode-watch.service >/dev/null 2>&1 || true
-rm -f "$HOME/.config/systemd/user/tablet-gestures.service" "$HOME/.config/systemd/user/tablet-mode-watch.service"
+systemctl --user disable --now tablet-gestures.service tablet-mode-watch.service tablet-rotate.service >/dev/null 2>&1 || true
+rm -f "$HOME/.config/systemd/user/tablet-gestures.service" "$HOME/.config/systemd/user/tablet-mode-watch.service" "$HOME/.config/systemd/user/tablet-rotate.service"
 systemctl --user daemon-reload
 pkill -x wvkbd-mobintl 2>/dev/null || true
 for p in tablet.rail tablet.screenoff; do

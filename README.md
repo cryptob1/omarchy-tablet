@@ -46,8 +46,9 @@ A rail on each edge of the screen, shown while the machine is in tablet mode. Wi
 
 | Button | Does |
 |---|---|
-| Settings | Opens the settings panel: look, one rail or two, button sounds. |
+| Settings | Opens the settings panel: look, screen rotation, one rail or two, button sounds. |
 | Stay awake | While lit: no screensaver, no auto-lock, no screen-off. Same state as the bar's mug indicator. |
+| Rotate | Tap to swap landscape and portrait; hold to turn the screen upside down. |
 | Brightness | A rocker: plus at the top, minus at the bottom, hold to keep going. It fills from the bottom to show the current level. |
 | Volume | The same rocker for volume; tap the speaker in the middle to mute. Uses Omarchy's own commands, so its on-screen display shows too. |
 | ‹ | Previous workspace, level with "next" on the right rail, so each direction is under its own thumb. Hold to take the focused window along. |
@@ -117,6 +118,18 @@ Ghostty does little useful with a finger. With its scrollbar on, a touch drag sc
 The selection is highlighted when you lift, not while you drag. GTK gives a widget's click gesture to one input at a time, so the terminal ignores mouse input for as long as a finger rests on it; the drag is played to it once the finger is up.
 
 Terminals recognised: Ghostty, foot, Alacritty, kitty, WezTerm (`TABLET_GESTURES_SCROLL_CLASSES` to change). The scrollbar setting and the measurements are Ghostty's; the others are untested.
+
+### Rotation
+
+The screen turns only when you say so. The Rotate button swaps landscape and portrait, and the settings panel has all three choices:
+
+| | |
+|---|---|
+| Landscape | Stays in landscape. Two rails. |
+| Portrait | Stays in portrait. The buttons become one bar along the bottom edge. |
+| Auto-rotate | Follows the tablet as you turn it. Offered only where Linux can read the tablet's orientation sensor (`iio-sensor-proxy` installed and reporting an accelerometer); greyed out otherwise. |
+
+`tablet-mode rotate landscape|portrait|auto|toggle|flip` does the same from a terminal. If portrait comes up the wrong way round for how you hold the tablet, put `270` in `~/.config/tablet-mode/portrait-turn` (the default is `90`).
 
 ### Also
 

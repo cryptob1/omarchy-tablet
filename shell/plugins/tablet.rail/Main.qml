@@ -215,6 +215,9 @@ Item {
     }
   }
   readonly property bool barSkinned: noKeyboard && skin !== null && barPosition === "top"
+  // The closed frame (corner pieces, bottom bezel) is for the two-rail,
+  // landscape layout; upright, the single bar of buttons is the bottom edge.
+  readonly property bool framed: barSkinned && !upright
   // What the bar's text sits on: the top of the shell. No scrim over it: the
   // strip has to be exactly as bright as the rails it runs into.
   readonly property color barBase: !skin ? "black"
@@ -249,6 +252,18 @@ Item {
   function setRails(v) { railsPref = v; run([home + "/.local/bin/tablet-mode", "rails", v]) }
   function setSounds(v) { soundsPref = v; run([home + "/.local/bin/tablet-mode", "sounds", v]); click() }
   readonly property bool controller: skin !== null
+  // `tablet-mode rotate landscape|portrait|auto`. Nothing turns the screen by
+  // itself unless "auto" is chosen, and that is only offered where the tablet
+  // has an orientation sensor Linux can read (asked once, at start).
+  property string rotationPref: "landscape"
+  property bool canAuto: false
+  Process {
+    id: autoProbe
+    command: [root.home + "/.local/bin/tablet-mode", "rotate", "can-auto"]
+    running: true
+    stdout: SplitParser { onRead: (line) => root.canAuto = String(line).trim() === "yes" }
+  }
+  function setRotation(v) { rotationPref = v; run([home + "/.local/bin/tablet-mode", "rotate", v]) }
   // `tablet-mode sounds on|off`: a soft tap as a button goes down.
   property string soundsPref: "off"
   property var tapSound: null
@@ -449,6 +464,15 @@ Item {
     onFileChanged: reload()
     onLoaded: root.lookPref = text()
     onLoadFailed: root.lookPref = "theme"
+  }
+
+  FileView {
+    path: root.stateDir + "/rotation"
+    watchChanges: true
+    printErrors: false
+    onFileChanged: reload()
+    onLoaded: root.rotationPref = text()
+    onLoadFailed: root.rotationPref = "landscape"
   }
 
   FileView {
@@ -1344,9 +1368,9 @@ Item {
       radius: Style.cornerRadius
       // Controller: square against the screen edges, round towards the windows.
       // Joined to the bar strip above: no corner there, the strip supplies it.
-      topLeftRadius: root.controller ? (root.barSkinned && !rail.upright ? 0 : root.shellRadius) : radius
+      topLeftRadius: root.controller ? (root.framed ? 0 : root.shellRadius) : radius
       topRightRadius: root.controller ? (rail.upright ? root.shellRadius : 0) : radius
-      bottomLeftRadius: root.controller ? (rail.upright || root.barSkinned ? 0 : root.shellRadius) : radius
+      bottomLeftRadius: root.controller ? (rail.upright || root.framed ? 0 : root.shellRadius) : radius
       bottomRightRadius: root.controller ? 0 : radius
       color: Qt.alpha(Color.popups.background, Color.popups.background.a * root.railOpacity)
       // Controller look: a moulded shell, lighter than the caps set into it.
@@ -1354,11 +1378,11 @@ Item {
       // Joined to the bar: no outline of its own (it would draw a line across
       // the join); the frame's inside edge is drawn separately instead.
       border.color: root.controller ? root.frameEdge : Color.popups.border
-      border.width: root.controller ? (root.barSkinned ? 0 : root.frameEdgeWidth) : 2
+      border.width: root.controller ? (root.framed ? 0 : root.frameEdgeWidth) : 2
 
       ShellPattern {
         anchors.fill: parent
-        anchors.margins: root.barSkinned ? 0 : root.frameEdgeWidth
+        anchors.margins: root.framed ? 0 : root.frameEdgeWidth
         visible: root.skin !== null
         pattern: root.skin ? root.skin.pattern : "none"
         seed: 11
@@ -1388,11 +1412,11 @@ Item {
         visible: root.skin !== null
         chars: root.skin && root.skin.chars ? root.skin.chars : []
         seed: 5
-        keepClear: root.barSkinned ? 0 : root.shellRadius
+        keepClear: root.framed ? 0 : root.shellRadius
       }
 
       Rectangle {       // the frame's inside edge, down the rail (joined to the bar only)
-        visible: root.barSkinned && !rail.upright
+        visible: root.framed
         x: 0; y: root.frameRadius
         width: root.frameEdgeWidth; height: parent.height - root.frameRadius * 2 - root.bezel
         color: root.frameEdge
@@ -1448,6 +1472,19 @@ Item {
           holdMs: 600
           heldGlyph: "󰒓"
           onHeld: root.settingsOpen = true
+        }
+        // Turn the screen: tap swaps landscape and portrait, hold turns it
+        // upside down. Lit while it follows the sensor ("auto").
+        TouchButton {
+          skin: root.skin
+          onPressedDown: root.click()
+          Layout.alignment: Qt.AlignCenter
+          visible: !root.dual
+          glyph: "󰑨"
+          active: root.rotationPref.trim() === "auto"
+          holdMs: 600
+          onTapped: root.setRotation(root.upright ? "landscape" : "portrait")
+          onHeld: root.run([root.home + "/.local/bin/tablet-mode", "rotate", "flip"])
         }
 
         ScrollStrip {
@@ -1566,8 +1603,8 @@ Item {
       anchors.topMargin: root.edgeGap
       anchors.bottomMargin: root.edgeGap
       radius: Style.cornerRadius
-      topRightRadius: root.controller ? (root.barSkinned ? 0 : root.shellRadius) : radius
-      bottomRightRadius: root.controller ? (root.barSkinned ? 0 : root.shellRadius) : radius
+      topRightRadius: root.controller ? (root.framed ? 0 : root.shellRadius) : radius
+      bottomRightRadius: root.controller ? (root.framed ? 0 : root.shellRadius) : radius
       topLeftRadius: root.controller ? 0 : radius
       bottomLeftRadius: root.controller ? 0 : radius
       color: Qt.alpha(Color.popups.background, Color.popups.background.a * root.railOpacity)
@@ -1576,11 +1613,11 @@ Item {
       // Joined to the bar: no outline of its own (it would draw a line across
       // the join); the frame's inside edge is drawn separately instead.
       border.color: root.controller ? root.frameEdge : Color.popups.border
-      border.width: root.controller ? (root.barSkinned ? 0 : root.frameEdgeWidth) : 2
+      border.width: root.controller ? (root.framed ? 0 : root.frameEdgeWidth) : 2
 
       ShellPattern {
         anchors.fill: parent
-        anchors.margins: root.barSkinned ? 0 : root.frameEdgeWidth
+        anchors.margins: root.framed ? 0 : root.frameEdgeWidth
         visible: root.skin !== null
         pattern: root.skin ? root.skin.pattern : "none"
         seed: 29
@@ -1610,11 +1647,11 @@ Item {
         visible: root.skin !== null
         chars: root.skin && root.skin.chars ? root.skin.chars : []
         seed: 9
-        keepClear: root.barSkinned ? 0 : root.shellRadius
+        keepClear: root.framed ? 0 : root.shellRadius
       }
 
       Rectangle {
-        visible: root.barSkinned
+        visible: root.framed
         x: parent.width - width; y: root.frameRadius
         width: root.frameEdgeWidth; height: parent.height - root.frameRadius * 2 - root.bezel
         color: root.frameEdge
@@ -1642,6 +1679,18 @@ Item {
           glyph: root.stayAwake ? "󰅶" : "󰛊"
           active: root.stayAwake
           onTapped: root.toggleStayAwake()
+        }
+        // Turn the screen: tap swaps landscape and portrait, hold turns it
+        // upside down. Lit while it follows the sensor ("auto").
+        TouchButton {
+          skin: root.skin
+          onPressedDown: root.click()
+          Layout.alignment: Qt.AlignCenter
+          glyph: "󰑨"
+          active: root.rotationPref.trim() === "auto"
+          holdMs: 600
+          onTapped: root.setRotation(root.upright ? "landscape" : "portrait")
+          onHeld: root.run([root.home + "/.local/bin/tablet-mode", "rotate", "flip"])
         }
 
         Item { Layout.fillHeight: true }
@@ -1768,7 +1817,7 @@ Item {
     WlrLayershell.keyboardFocus: WlrKeyboardFocus.None
     exclusionMode: ExclusionMode.Ignore
     anchors { top: true; left: true; right: true }
-    implicitHeight: Style.bar.sizeHorizontal + root.frameRadius
+    implicitHeight: Style.bar.sizeHorizontal + (root.framed ? root.frameRadius : 0.5)
     mask: Region {}                      // never takes a touch
 
     ShellPattern {
@@ -1776,7 +1825,7 @@ Item {
       visible: root.skin !== null
       base: root.skin ? root.barBase : "transparent"
       flatWash: true
-      frameRail: root.dual ? root.railSize : 0.01
+      frameRail: root.framed && root.dual ? root.railSize : 0.01
       frameBar: Style.bar.sizeHorizontal
       edge: root.frameEdge
       edgeWidth: root.frameEdgeWidth
@@ -1799,7 +1848,7 @@ Item {
 
   PanelWindow {
     id: bezelStrip
-    visible: root.barSkinned
+    visible: root.framed
     screen: Quickshell.screens.length > 0 ? Quickshell.screens[0] : null
     color: "transparent"
     WlrLayershell.namespace: "omarchy-tablet-bar"
@@ -1958,35 +2007,45 @@ Item {
           }
         }
 
-        // Two-way switches, drawn as a pair of pills with the chosen one filled.
+        // Switches: a row of pills with the chosen one filled.
         Repeater {
           model: [
-            { title: "Rails", a: "both", aLabel: "Both sides", b: "right", bLabel: "Right only" },
-            { title: "Button sounds", a: "on", aLabel: "On", b: "off", bLabel: "Off" }
+            { key: "rotation", title: "Screen", options: [
+                { v: "landscape", l: "Landscape" }, { v: "portrait", l: "Portrait" },
+                { v: "auto", l: root.canAuto ? "Auto-rotate" : "Auto (no sensor)", off: !root.canAuto }] },
+            { key: "rails", title: "Rails", options: [{ v: "both", l: "Both sides" }, { v: "right", l: "Right only" }] },
+            { key: "sounds", title: "Button sounds", options: [{ v: "on", l: "On" }, { v: "off", l: "Off" }] }
           ]
           RowLayout {
             id: sw2
             required property var modelData
-            required property int index
-            readonly property string current: index === 0 ? (root.railsPref.trim() === "right" ? "right" : "both")
-                                                           : (root.soundsPref.trim() === "on" ? "on" : "off")
+            readonly property string current: modelData.key === "rotation" ? root.rotationPref.trim()
+              : (modelData.key === "rails" ? (root.railsPref.trim() === "right" ? "right" : "both")
+                                           : (root.soundsPref.trim() === "on" ? "on" : "off"))
             Layout.fillWidth: true
             spacing: 8
             Text { text: sw2.modelData.title; color: Color.popups.text; font.pixelSize: 15; Layout.fillWidth: true }
             Repeater {
-              model: [{ v: sw2.modelData.a, l: sw2.modelData.aLabel }, { v: sw2.modelData.b, l: sw2.modelData.bLabel }]
+              model: sw2.modelData.options
               Rectangle {
                 required property var modelData
                 readonly property bool on: sw2.current === modelData.v
-                implicitWidth: 112; implicitHeight: 38; radius: 19
+                readonly property bool off: !!modelData.off
+                implicitWidth: 126; implicitHeight: 38; radius: 19
                 color: on ? Color.accent : Qt.alpha(Color.popups.text, 0.08)
                 border.width: on ? 0 : 1
                 border.color: Qt.alpha(Color.popups.text, 0.2)
-                Text { anchors.centerIn: parent; text: parent.modelData.l; font.pixelSize: 14
+                opacity: off ? 0.4 : 1
+                Text { anchors.centerIn: parent; text: parent.modelData.l; font.pixelSize: 13
                        color: parent.on ? Color.background : Color.popups.text }
                 MouseArea {
                   anchors.fill: parent
-                  onClicked: { if (sw2.index === 0) root.setRails(parent.modelData.v); else root.setSounds(parent.modelData.v) }
+                  enabled: !parent.off
+                  onClicked: {
+                    if (sw2.modelData.key === "rotation") root.setRotation(parent.modelData.v)
+                    else if (sw2.modelData.key === "rails") root.setRails(parent.modelData.v)
+                    else root.setSounds(parent.modelData.v)
+                  }
                 }
               }
             }
