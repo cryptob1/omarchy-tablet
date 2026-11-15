@@ -1438,6 +1438,7 @@ Item {
     property real tall: 34
     property bool lit: false               // a modifier that is held on (Shift, Ctrl)
     property int labelSize: 13
+    property int pad: 24                   // room round the legend
     property bool faint: false             // a place with nothing in it: the legend steps back
     property int holdMs: 0                 // > 0: hit() on lifting, held() after this long down
     signal hit()
@@ -1448,7 +1449,7 @@ Item {
     property real sink: kcArea.pressed ? 1 : 0
     Behavior on sink { NumberAnimation { duration: kc.sink > 0.5 ? 110 : 55 } }
     transform: Translate { y: kc.sink * 2 }
-    implicitWidth: wide > 0 ? wide : Math.max(46, kcText.implicitWidth + 24)
+    implicitWidth: wide > 0 ? wide : Math.max(Math.min(46, 22 + pad), kcText.implicitWidth + pad)
     implicitHeight: tall
     radius: corner >= 0.5 ? height / 2 : Math.max(4, height * corner)
     border.width: 1.5
@@ -2943,7 +2944,7 @@ Item {
     exclusiveZone: root.slide > 0 ? root.bezel : 0
     anchors { bottom: true; left: true; right: true }
     implicitHeight: root.bezel + root.frameRadius
-    mask: Region { item: keyRow; Region { item: pagerRow } Region { item: clockKey } }   // only the keys take a touch
+    mask: Region { item: keyRow; Region { item: pagerRow } Region { item: clockKey } Region { item: linkRow } Region { item: meterTap } }   // only the keys take a touch
 
     ShellPattern {
       id: bezelPattern
@@ -3005,15 +3006,50 @@ Item {
       onPressedDown: root.click()
       onHit: if (root.topbarPref.trim() !== "show") root.barPeek = !root.barPeek
     }
+    // The meters take a tap: the battery opens Omarchy's power panel (power
+    // saver, balanced, performance), processor and memory its monitor panel.
+    MouseArea {
+      id: meterTap
+      visible: root.pagerOn
+      x: parent.width - root.railSize - 16 - 3 * 74 - 4
+      y: root.frameRadius
+      width: 3 * 74 + 8; height: root.bezel
+      onPressed: function(mouse) {
+        root.click()
+        root.run(["omarchy-shell", "-q", mouse.x > 2 * 74 ? "omarchy.power" : "omarchy.monitor", "toggle"])
+      }
+    }
+    // Wi-Fi and Bluetooth: Omarchy's own panels, which open without its bar.
+    Row {
+      id: linkRow
+      visible: root.pagerOn
+      x: clockKey.x - width - 8
+      y: clockKey.y
+      spacing: 6
+      Repeater {
+        model: [{ g: "\udb81\udda9", t: "omarchy.network" }, { g: "\udb80\udcaf", t: "omarchy.bluetooth" }]
+        KeyCap {
+          required property var modelData
+          skin: root.skin
+          corner: root.corner
+          wide: 36
+          label: modelData.g
+          labelSize: 15
+          onPressedDown: root.click()
+          onHit: root.run(["omarchy-shell", "-q", modelData.t, "toggle"])
+        }
+      }
+    }
     Row {
       id: keyRow
       visible: root.keysShown
       // Centred in what the pager and the meters leave.
       readonly property real from: root.pagerOn ? pagerRow.x + pagerRow.width + 14 : root.railSize
-      readonly property real to: root.pagerOn ? clockKey.x - 14 : parent.width - root.railSize
+      readonly property real to: root.pagerOn ? linkRow.x - 14 : parent.width - root.railSize
+      readonly property bool tight: root.keySet.length > 8 && root.pagerOn
       x: Math.max(from, from + (to - from - width) / 2)
       y: root.frameRadius + (root.bezel - 34) / 2
-      spacing: root.keySet.length > 10 ? 7 : 9
+      spacing: tight ? 5 : 9
       Repeater {
         model: root.keysShown ? root.keySet : []
         KeyCap {
@@ -3021,6 +3057,8 @@ Item {
           skin: root.skin
           corner: root.corner
           label: modelData.l
+          pad: keyRow.tight ? 14 : 24
+          labelSize: keyRow.tight ? 12 : 13
           repeats: !!modelData.r
           onPressedDown: root.click()
           onHit: root.sendKeys(modelData.k)
