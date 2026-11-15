@@ -4,15 +4,13 @@
 // TWO RAILS (the default, `tablet-mode rails both`): held in both hands, a big
 // tablet has a thumb on each edge, and the lower a button is the easier it is
 // to reach. So the buttons are split by hand and ordered bottom-up by use:
-//   right, top down    close, maximise, the workspace number, the scroll
-//                      strip, then where the thumb rests: mic, enter, NEXT
-//                      workspace, keyboard, switch window
-//   left, top down     settings, rotate, stay awake; a brightness rocker and a
-//                      volume rocker (plus / minus, hold to repeat, filled to
-//                      show the level; tap the speaker to mute); then where
-//                      the thumb rests: back (hold: forward), the app drawer,
-//                      PREVIOUS workspace level with "next", paste (hold:
-//                      copy), play-pause (hold: next track)
+//   right, top down    close, the scroll strip, then where the thumb rests:
+//                      mic, enter, paste (hold: copy), keyboard. What goes IN.
+//   left, top down     power, settings, rotate, stay awake, today; a
+//                      brightness rocker and a volume rocker; play-pause;
+//                      then where the thumb rests: maximise and switch window
+//                      together, back (hold: forward), the app drawer.
+//                      Moving ABOUT. Desktops are in the bottom band.
 // `tablet-mode rails right`, or an upright screen, gives the single rail
 // described below, which has no media or volume buttons.
 //
@@ -2380,6 +2378,7 @@ Item {
 
           onPressedDown: root.click()
           Layout.alignment: Qt.AlignCenter
+          visible: !root.dual      // two rails: on the left, with the window switcher
           glyph: "󰊓"
           onTapped: root.toggleMaximise()
         }
@@ -2482,6 +2481,19 @@ Item {
         }
 
         TouchButton {
+          skin: root.skin
+          corner: root.corner
+          onPressedDown: root.click()
+          Layout.alignment: Qt.AlignCenter
+          visible: root.dual      // one rail: the long-press menu pastes
+          glyph: "󰆒"
+          heldGlyph: "󰆏"
+          holdMs: 500
+          onTapped: root.run([root.home + "/.local/bin/tablet-touch", "paste-here"])
+          onHeld: root.run([root.home + "/.local/bin/tablet-touch", "copy-here"])
+        }
+
+        TouchButton {
 
           skin: root.skin
           corner: root.corner
@@ -2554,6 +2566,7 @@ Item {
 
           onPressedDown: root.click()
           Layout.alignment: Qt.AlignCenter
+          visible: !root.dual      // two rails: with the other window button, on the left
           glyph: "󰓡"
           onTapped: root.run([root.home + "/.local/bin/tablet-touch", "next-window"])
         }
@@ -2763,6 +2776,43 @@ Item {
           onMiddle: root.run(["omarchy-audio-output-volume", "mute-toggle"])
         }
 
+        // Under the left thumb, top to bottom: play, then the two window buttons
+        // together (fill the screen, next window), then Back and the app drawer
+        // lowest, where Android has them.
+        TouchButton {
+          skin: root.skin
+          corner: root.corner
+          onPressedDown: root.click()
+          Layout.alignment: Qt.AlignCenter
+          glyph: "󰐎"
+          heldGlyph: "󰒭"
+          holdMs: root.carryMs
+          onTapped: root.run(["omarchy-shell", "media", "playPause"])
+          onHeld: root.run(["omarchy-shell", "media", "next"])
+        }
+
+        TouchButton {
+
+          skin: root.skin
+          corner: root.corner
+
+          onPressedDown: root.click()
+          Layout.alignment: Qt.AlignCenter
+          glyph: "󰊓"
+          onTapped: root.toggleMaximise()
+        }
+
+        TouchButton {
+
+          skin: root.skin
+          corner: root.corner
+
+          onPressedDown: root.click()
+          Layout.alignment: Qt.AlignCenter
+          glyph: "󰓡"
+          onTapped: root.run([root.home + "/.local/bin/tablet-touch", "next-window"])
+        }
+
         TouchButton {
           skin: root.skin
           corner: root.corner
@@ -2800,30 +2850,6 @@ Item {
           holdMs: root.carryMs
           onTapped: root.wsTapped("r-1")
           onHeld: root.wsHeld("r-1")
-        }
-
-        TouchButton {
-          skin: root.skin
-          corner: root.corner
-          onPressedDown: root.click()
-          Layout.alignment: Qt.AlignCenter
-          glyph: "󰆒"
-          heldGlyph: "󰆏"
-          holdMs: 500
-          onTapped: root.run([root.home + "/.local/bin/tablet-touch", "paste-here"])
-          onHeld: root.run([root.home + "/.local/bin/tablet-touch", "copy-here"])
-        }
-
-        TouchButton {
-          skin: root.skin
-          corner: root.corner
-          onPressedDown: root.click()
-          Layout.alignment: Qt.AlignCenter
-          glyph: "󰐎"
-          heldGlyph: "󰒭"
-          holdMs: root.carryMs
-          onTapped: root.run(["omarchy-shell", "media", "playPause"])
-          onHeld: root.run(["omarchy-shell", "media", "next"])
         }
       }
     }

@@ -57,19 +57,18 @@ Every button's touch target is bigger than the button you see: it reaches out to
 
 The order is set by how a tablet of this size is held. It has weight, so you grip it low on each side with your palms under the corners, and your thumbs rest about two thirds of the way down the screen. From there a thumb reaches up easily, down with a curl, and the top third not at all without letting go. So the things you use constantly are where the thumbs rest, the things you hold or drag are in easy reach, the corners get what you use least, and what you must not hit by accident is at the top. The lower rows of the two rails line up.
 
+The left thumb moves you around (windows, back, apps, media); the right thumb puts things in (scroll, speak, Enter, paste, type). Desktops are in the bottom band (see The pager) while it is up; upright or on the plain look, a previous and a next arrow return to the rails.
+
 **Right rail**, top to bottom:
 
 | Button | Does |
 |---|---|
 | Close | Closes the focused window. Asks first: one tap arms it ("Close?"), a second tap within 3 s closes. At the top, out of the thumb's way. |
-| Maximise | Fills the screen with the focused window, or restores it. The bar and rails stay. |
-| n | The current workspace number. |
 | Scroll strip | Drag along it to scroll the focused window, like a mouse wheel: down moves further down the page. Let go while moving and it keeps going. With an Omarchy picker open, it scrolls that instead. |
 | Mic | Push-to-talk dictation, using Omarchy's default dictation backend (see [Dictation](#dictation)). Where the thumb rests, because you hold it while you speak. |
 | Enter | Sends Enter to the focused app: sends what you just said. |
-| › | Next workspace. Hold to take the focused window along. |
+| Paste | Pastes into the focused app; hold to copy instead. Uses the terminal's own shortcuts in a terminal. On the typing side, with the mic, Enter and the keyboard. |
 | Keyboard | Shows or hides the on-screen keyboard. |
-| Switch | Focuses the next window on the workspace. If the current one fills the screen, the next takes its place. |
 
 **Left rail**, top to bottom:
 
@@ -82,11 +81,11 @@ The order is set by how a tablet of this size is held. It has weight, so you gri
 | Today | The time and date large enough to read at arm's length, the battery, and a month calendar. |
 | Brightness | A rocker: plus at the top, minus at the bottom, hold to keep going. It fills from the bottom to show the current level. |
 | Volume | The same rocker for volume; tap the speaker in the middle to mute. Uses Omarchy's own commands, so its on-screen display shows too. |
+| Play / pause | Hold for the next track. |
+| Maximise | Fills the screen with the focused window, or restores it. The rails stay. Next to Switch: the two window buttons are together. |
+| Switch | Focuses the next window on the workspace. If the current one fills the screen, the next takes its place. |
 | Back | Goes back in the focused app, as on a phone (it sends Alt+Left: back in browsers, file managers and most apps with a history); closes the app drawer or the settings panel if one is open. Hold for forward. Where the left thumb rests. |
 | Apps | Opens the app drawer: every app, big, on nearly the whole screen. Drag or flick to scroll, tap to launch. Hold for Omarchy's own launcher (which has search, and wants a keyboard). Three fingers up opens the drawer too. |
-| ‹ | Previous workspace, level with "next" on the right rail. Hold to take the focused window along. |
-| Paste | Pastes into the focused app; hold to copy instead. Uses the terminal's own shortcuts in a terminal. |
-| Play / pause | Hold for the next track. |
 
 `tablet-mode rails right` puts everything except the media, volume and brightness controls on a single right-hand rail (hold Stay awake there for the settings panel); `tablet-mode rails both` brings the second one back. An upright screen always gets the single rail, along the bottom edge.
 
