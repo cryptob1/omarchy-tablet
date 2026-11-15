@@ -16,6 +16,7 @@ Reactions:
 
     tablet-mode set tablet|laptop | toggle | status
     tablet-mode mic always|auto      keep the mic button on screen in laptop mode too
+    tablet-mode rails both|right     a rail on each edge (default), or one on the right
     tablet-mode dictation on|off     show the mic button at all (needs a dictation
                                      backend: see `tablet-touch` DICTATION)
     tablet-mode watch                detachable-keyboard detector (user service)
@@ -107,6 +108,8 @@ def main():
         print(status())
     elif cmd[0] == "mic" and len(cmd) == 2 and cmd[1] in ("always", "auto"):
         write(os.path.join(STATE_DIR, "mic"), cmd[1])
+    elif cmd[0] == "rails" and len(cmd) == 2 and cmd[1] in ("both", "right"):
+        write(os.path.join(STATE_DIR, "rails"), cmd[1])
     elif cmd[0] == "dictation" and len(cmd) == 2 and cmd[1] in ("on", "off"):
         write(os.path.join(STATE_DIR, "dictation"), cmd[1])
     elif cmd[0] == "watch":

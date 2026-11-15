@@ -1,6 +1,17 @@
 // Touch controls for tablet use: a rail of buttons along the screen edge, with
 // a push-to-talk mic for your dictation tool at its end.
 //
+// TWO RAILS (the default, `tablet-mode rails both`): held in both hands, a big
+// tablet has a thumb on each edge, and the lower a button is the easier it is
+// to reach. So the buttons are split by hand and ordered bottom-up by use:
+//   right, bottom up   mic, enter, keyboard, switch window, the scroll strip,
+//                      maximise, and close at the top
+//   left, bottom up    next / previous workspace, launcher, play-pause (hold:
+//                      next track), volume down / up (hold: repeat), and stay
+//                      awake at the top
+// `tablet-mode rails right`, or an upright screen, gives the single rail
+// described below, which has no media or volume buttons.
+//
 // THE RAIL. While ~/.local/state/tablet-mode/state reads "tablet" (written by
 // bin/tablet-mode on keyboard detach) a strip RAIL px wide is reserved along
 // the right edge (the bottom edge when the screen is upright). Windows stop
@@ -67,6 +78,8 @@ Item {
   readonly property string stateDir: home + "/.local/state/tablet-mode"
   property string mode: "laptop"
   property string micPref: "auto"
+  // `tablet-mode rails both|right`: a rail on each edge, or one on the right.
+  property string railsPref: "both"
   property string cortexState: "idle"   // the dictation backend's state
   property string micWord: ""           // ...as a plain word, when it publishes one
   // Whether there is a mic at all: `tablet-mode dictation on|off`.
@@ -213,6 +226,15 @@ Item {
   }
 
   FileView {
+    path: root.stateDir + "/rails"
+    watchChanges: true
+    printErrors: false
+    onFileChanged: reload()
+    onLoaded: root.railsPref = text()
+    onLoadFailed: root.railsPref = "both"
+  }
+
+  FileView {
     path: root.stateDir + "/mic"
     watchChanges: true
     printErrors: false
@@ -259,8 +281,8 @@ Item {
   component TouchButton: Rectangle {
     id: b
     property string glyph: ""
-    property int size: 56
-    property int glyphSize: 26
+    property int size: 50
+    property int glyphSize: 24
     property bool boldGlyph: false
     property bool active: false
     property color activeColor: Color.accent
@@ -270,6 +292,8 @@ Item {
     property int holdMs: 0
     property string heldGlyph: ""
     property bool holding: false
+    // > 0: tapped() fires on press and then every repeatMs while held (volume).
+    property int repeatMs: 0
     signal tapped()
     signal held()
 
@@ -296,10 +320,17 @@ Item {
       id: area
       anchors.fill: parent
       pressAndHoldInterval: b.holdMs > 0 ? b.holdMs : 800
+      onPressed: if (b.repeatMs > 0) { b.tapped(); again.interval = 380; again.start() }
       onPressAndHold: if (b.holdMs > 0) { b.holding = true; b.held() }
-      onClicked: (mouse) => { if (!(b.holdMs > 0 && mouse.wasHeld)) b.tapped() }
-      onReleased: b.holding = false
-      onCanceled: b.holding = false
+      onClicked: (mouse) => { if (b.repeatMs === 0 && !(b.holdMs > 0 && mouse.wasHeld)) b.tapped() }
+      onReleased: { b.holding = false; again.stop() }
+      onCanceled: { b.holding = false; again.stop() }
+    }
+
+    Timer {
+      id: again
+      repeat: true
+      onTriggered: { interval = b.repeatMs; b.tapped() }
     }
   }
 
@@ -412,7 +443,7 @@ Item {
       if (n !== 0) { owed -= n; wheel(n) }
     }
 
-    implicitWidth: 56; implicitHeight: 56
+    implicitWidth: 50; implicitHeight: 50
     radius: 16
     color: Qt.alpha(Color.popups.text, area.pressed || fling.running ? 0.16 : 0.07)
     Behavior on color { ColorAnimation { duration: 120 } }
@@ -486,7 +517,11 @@ Item {
   }
 
   // ---------------------------------------------------------------- the rail
-  readonly property int railSize: 76
+  readonly property int railSize: 64
+  // Two rails when asked for and the screen is wide; upright, one bar.
+  readonly property bool upright: Quickshell.screens.length > 0
+    && Quickshell.screens[0].height > Quickshell.screens[0].width
+  readonly property bool dual: !upright && railsPref.trim() !== "right"
   // The rail is a card like every other Omarchy surface: the windows' corner
   // radius and border width, and the same gap to the screen edge that windows
   // keep (Style.gapsOut is half of Hyprland's gaps_out). No gap on the window
@@ -529,15 +564,15 @@ Item {
 
       GridLayout {
         anchors.fill: parent
-        anchors.margins: 10
+        anchors.margins: 7
         flow: rail.upright ? GridLayout.LeftToRight : GridLayout.TopToBottom
-        rowSpacing: 12
-        columnSpacing: 12
+        rowSpacing: 10
+        columnSpacing: 10
 
         TouchButton {
           Layout.alignment: Qt.AlignCenter
           glyph: root.closeArmed ? "Close?" : "󰅖"
-          glyphSize: root.closeArmed ? 13 : 26
+          glyphSize: root.closeArmed ? 12 : 24
           boldGlyph: root.closeArmed
           active: root.closeArmed
           activeColor: Color.urgent
@@ -546,21 +581,18 @@ Item {
 
         TouchButton {
           Layout.alignment: Qt.AlignCenter
-          glyph: "󰓡"
-          onTapped: root.run([root.home + "/.local/bin/tablet-touch", "next-window"])
-        }
-        TouchButton {
-          Layout.alignment: Qt.AlignCenter
           glyph: "󰊓"
           onTapped: root.toggleMaximise()
         }
         TouchButton {
           Layout.alignment: Qt.AlignCenter
+          visible: !root.dual
           glyph: "󰀻"
           onTapped: root.run(["omarchy-menu", "toggle", "apps"])
         }
         TouchButton {
           Layout.alignment: Qt.AlignCenter
+          visible: !root.dual
           glyph: root.stayAwake ? "󰅶" : "󰛊"
           active: root.stayAwake
           onTapped: root.toggleStayAwake()
@@ -575,6 +607,134 @@ Item {
           onWheel: (notches) => Quickshell.execDetached(["ydotool", "mousemove", "--wheel", "-x", "0", "-y", String(notches)])
         }
 
+        TouchButton {
+          Layout.alignment: Qt.AlignCenter
+          glyph: "󰓡"
+          onTapped: root.run([root.home + "/.local/bin/tablet-touch", "next-window"])
+        }
+
+        TouchButton {
+          Layout.alignment: Qt.AlignCenter
+          visible: !root.dual
+          glyph: "󰁍"
+          heldGlyph: "󰖯"
+          holdMs: root.carryMs
+          onTapped: root.wsTapped("r-1")
+          onHeld: root.wsHeld("r-1")
+        }
+        Text {
+          Layout.alignment: Qt.AlignCenter
+          visible: !root.dual
+          text: Hyprland.focusedWorkspace !== null ? Hyprland.focusedWorkspace.id : ""
+          color: Color.popups.text
+          opacity: 0.75
+          font.pixelSize: 17
+          font.bold: true
+        }
+        TouchButton {
+          Layout.alignment: Qt.AlignCenter
+          visible: !root.dual
+          glyph: "󰁔"
+          heldGlyph: "󰖯"
+          holdMs: root.carryMs
+          onTapped: root.wsTapped("r+1")
+          onHeld: root.wsHeld("r+1")
+        }
+
+        TouchButton {
+          Layout.alignment: Qt.AlignCenter
+          glyph: "󰌌"
+          onTapped: root.run([root.home + "/.local/bin/tablet-osk", "toggle"])
+        }
+        TouchButton {
+          Layout.alignment: Qt.AlignCenter
+          glyph: "󰌑"
+          onTapped: root.run(["ydotool", "key", "28:1", "28:0"])
+        }
+        MicButton {
+          Layout.alignment: Qt.AlignCenter
+          visible: root.hasMic
+          size: 50
+          prominent: true
+          listening: root.listening
+          busy: root.busy
+          onDown: root.micPress()
+          onUp: root.micRelease()
+        }
+      }
+    }
+  }
+
+  // The left rail (two-rail layout): where the other thumb rests. Bottom up,
+  // most used first: workspaces, launcher, then media and volume, with stay
+  // awake out of the way at the top.
+  PanelWindow {
+    id: railLeft
+    visible: root.noKeyboard && root.dual
+    screen: Quickshell.screens.length > 0 ? Quickshell.screens[0] : null
+    color: "transparent"
+    WlrLayershell.namespace: "omarchy-tablet-rail"
+    WlrLayershell.layer: WlrLayer.Top
+    WlrLayershell.keyboardFocus: WlrKeyboardFocus.None
+    exclusiveZone: root.railSize + root.railGap
+    anchors { left: true; top: true; bottom: true }
+    implicitWidth: root.railSize + root.railGap
+    implicitHeight: root.railSize + root.railGap
+
+    Rectangle {
+      anchors.fill: parent
+      anchors.leftMargin: root.railGap
+      anchors.topMargin: root.railGap
+      anchors.bottomMargin: root.railGap
+      radius: Style.cornerRadius
+      color: Qt.alpha(Color.popups.background, Color.popups.background.a * root.railOpacity)
+      border.color: Color.popups.border
+      border.width: 2
+
+      ColumnLayout {
+        anchors.fill: parent
+        anchors.margins: 7
+        spacing: 10
+
+        TouchButton {
+          Layout.alignment: Qt.AlignCenter
+          glyph: root.stayAwake ? "󰅶" : "󰛊"
+          active: root.stayAwake
+          onTapped: root.toggleStayAwake()
+        }
+
+        Item { Layout.fillHeight: true }
+
+        // Volume: hold to keep going. Omarchy's own command, so its OSD shows.
+        TouchButton {
+          Layout.alignment: Qt.AlignCenter
+          glyph: "󰝝"
+          repeatMs: 120
+          onTapped: root.run(["omarchy-audio-output-volume", "raise"])
+        }
+        TouchButton {
+          Layout.alignment: Qt.AlignCenter
+          glyph: "󰝞"
+          repeatMs: 120
+          onTapped: root.run(["omarchy-audio-output-volume", "lower"])
+        }
+        // Play / pause; hold for the next track.
+        TouchButton {
+          Layout.alignment: Qt.AlignCenter
+          glyph: "󰐎"
+          heldGlyph: "󰒭"
+          holdMs: root.carryMs
+          onTapped: root.run(["omarchy-shell", "media", "playPause"])
+          onHeld: root.run(["omarchy-shell", "media", "next"])
+        }
+
+        Item { Layout.fillHeight: true }
+
+        TouchButton {
+          Layout.alignment: Qt.AlignCenter
+          glyph: "󰀻"
+          onTapped: root.run(["omarchy-menu", "toggle", "apps"])
+        }
         TouchButton {
           Layout.alignment: Qt.AlignCenter
           glyph: "󰁍"
@@ -598,27 +758,6 @@ Item {
           holdMs: root.carryMs
           onTapped: root.wsTapped("r+1")
           onHeld: root.wsHeld("r+1")
-        }
-
-        TouchButton {
-          Layout.alignment: Qt.AlignCenter
-          glyph: "󰌌"
-          onTapped: root.run([root.home + "/.local/bin/tablet-osk", "toggle"])
-        }
-        TouchButton {
-          Layout.alignment: Qt.AlignCenter
-          glyph: "󰌑"
-          onTapped: root.run(["ydotool", "key", "28:1", "28:0"])
-        }
-        MicButton {
-          Layout.alignment: Qt.AlignCenter
-          visible: root.hasMic
-          size: 56
-          prominent: true
-          listening: root.listening
-          busy: root.busy
-          onDown: root.micPress()
-          onUp: root.micRelease()
         }
       }
     }

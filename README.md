@@ -1,29 +1,40 @@
 # omarchy-tablet
 
-Touch controls for [Omarchy](https://omarchy.org) on a tablet or a 2-in-1 with the keyboard off: a rail of buttons along the screen edge, touchscreen gestures, an on-screen keyboard that works on the lock screen, and one-finger scrolling and text selection in terminals.
+Touch controls for [Omarchy](https://omarchy.org) on a tablet or a 2-in-1 with the keyboard off: a rail of buttons on each edge of the screen, touchscreen gestures, an on-screen keyboard that works on the lock screen, and one-finger scrolling and text selection in terminals.
 
 Omarchy is built around the keyboard. Take the keyboard away and there is no way to close a window, switch workspace, open the launcher or type a Wi-Fi password. This fills that gap without a compositor plugin: it is a shell plugin, a small daemon that reads the touchscreen directly, and a few scripts.
 
 ## What you get
 
-### The rail
+### The rails
 
-A strip along the right edge (the bottom edge when the screen is upright), shown while the machine is in tablet mode. Windows stop at it, so it never covers anything. Top to bottom:
+A rail on each edge of the screen, shown while the machine is in tablet mode. Windows stop at them, so they never cover anything. A big tablet is held in both hands with a thumb on each edge, so the buttons are split by hand, and the most used sit lowest.
+
+**Right rail**, top to bottom:
 
 | Button | Does |
 |---|---|
 | Close | Closes the focused window. Asks first: one tap arms it ("Close?"), a second tap within 3 s closes. |
-| Switch | Focuses the next window on the workspace. If the current one fills the screen, the next takes its place. |
-| Maximise | Fills the screen with the focused window, or restores it. The bar and rail stay. |
-| Launcher | Opens the app menu. |
-| Stay awake | While lit: no screensaver, no auto-lock, no screen-off. Same state as the bar's mug indicator. |
+| Maximise | Fills the screen with the focused window, or restores it. The bar and rails stay. |
 | Scroll strip | Drag along it to scroll the focused window. Let go while moving and it keeps going. |
-| ‹ n › | Previous / next workspace, with the current number. Hold an arrow to take the focused window along. |
+| Switch | Focuses the next window on the workspace. If the current one fills the screen, the next takes its place. |
 | Keyboard | Shows or hides the on-screen keyboard. |
 | Enter | Sends Enter to the focused app. |
 | Mic | Push-to-talk for a dictation tool. Only shown if you have one set up (see [Dictation](#dictation)). |
 
-The rail follows your theme: the shell's colours, corner radius, border and gaps.
+**Left rail**, top to bottom:
+
+| Button | Does |
+|---|---|
+| Stay awake | While lit: no screensaver, no auto-lock, no screen-off. Same state as the bar's mug indicator. |
+| Volume up / down | Hold to keep going. Omarchy's own volume command, so its on-screen display shows. |
+| Play / pause | Hold for the next track. |
+| Launcher | Opens the app menu. |
+| ‹ n › | Previous / next workspace, with the current number. Hold an arrow to take the focused window along. |
+
+`tablet-mode rails right` puts everything except the media and volume buttons on a single right-hand rail; `tablet-mode rails both` brings the second one back. An upright screen always gets the single rail, along the bottom edge.
+
+The rails follow your theme: the shell's colours, corner radius, border and gaps.
 
 ### Gestures
 
@@ -72,11 +83,11 @@ The installer installs `wvkbd` (AUR), `ydotool` and `jq` if they are missing (`-
 
 ## Tablet mode
 
-The rail shows while the machine is in tablet mode. There is one switch:
+The rails show while the machine is in tablet mode. There is one switch:
 
 ```sh
-tablet-mode set tablet     # show the rail
-tablet-mode set laptop     # hide it
+tablet-mode set tablet     # show the rails
+tablet-mode set laptop     # hide them
 tablet-mode toggle
 ```
 
@@ -122,10 +133,10 @@ Built and used on one machine: an ASUS ProArt PZ13 (Snapdragon, detachable keybo
 
 Known limits:
 
-- A truly fullscreen window (a film) covers the rail. Leave fullscreen to get it back.
+- A truly fullscreen window (a film) covers the rails. Leave fullscreen to get them back.
 - After a fast fling a terminal can be left with a stray highlight; a tap clears it.
 - The rail's bottom-edge layout for an upright screen has not been tried on a rotated screen.
-- Multi-monitor: the rail is drawn on the first screen only.
+- Multi-monitor: the rails are drawn on the first screen only.
 
 ## License
 
