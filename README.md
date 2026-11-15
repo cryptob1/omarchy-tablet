@@ -55,33 +55,36 @@ A rail on each edge of the screen, shown while the machine is in tablet mode. Wi
 
 Every button's touch target is bigger than the button you see: it reaches out to the rail's edges and half-way to its neighbours, so there is no dead space between buttons, and a tap still counts if your thumb rolls off the button as it lifts.
 
+The order is set by how a tablet of this size is held. It has weight, so you grip it low on each side with your palms under the corners, and your thumbs rest about two thirds of the way down the screen. From there a thumb reaches up easily, down with a curl, and the top third not at all without letting go. So the things you use constantly are where the thumbs rest, the things you hold or drag are in easy reach, the corners get what you use least, and what you must not hit by accident is at the top. The lower rows of the two rails line up.
+
 **Right rail**, top to bottom:
 
 | Button | Does |
 |---|---|
-| Close | Closes the focused window. Asks first: one tap arms it ("Close?"), a second tap within 3 s closes. |
+| Close | Closes the focused window. Asks first: one tap arms it ("Close?"), a second tap within 3 s closes. At the top, out of the thumb's way. |
 | Maximise | Fills the screen with the focused window, or restores it. The bar and rails stay. |
-| Scroll strip | Drag along it to scroll the focused window, like a mouse wheel: down moves further down the page. Let go while moving and it keeps going. With the app launcher (or another Omarchy picker) open, it scrolls that instead: the only way to scroll the launcher by touch, since a finger dragged on its grid picks an app up. |
-| Switch | Focuses the next window on the workspace. If the current one fills the screen, the next takes its place. |
+| n | The current workspace number. |
+| Scroll strip | Drag along it to scroll the focused window, like a mouse wheel: down moves further down the page. Let go while moving and it keeps going. With an Omarchy picker open, it scrolls that instead. |
+| Mic | Push-to-talk dictation, using Omarchy's default dictation backend (see [Dictation](#dictation)). Where the thumb rests, because you hold it while you speak. |
+| Enter | Sends Enter to the focused app: sends what you just said. |
+| › | Next workspace. Hold to take the focused window along. |
 | Keyboard | Shows or hides the on-screen keyboard. |
-| n › | The current workspace number, and next workspace. Hold the arrow to take the focused window along. |
-| Enter | Sends Enter to the focused app. |
-| Mic | Push-to-talk dictation, using Omarchy's default dictation backend (see [Dictation](#dictation)). |
+| Switch | Focuses the next window on the workspace. If the current one fills the screen, the next takes its place. |
 
 **Left rail**, top to bottom:
 
 | Button | Does |
 |---|---|
-| Settings | Opens the settings panel: look, screen rotation, one rail or two, button sounds. |
-| Stay awake | While lit: no screensaver, no auto-lock, no screen-off. Same state as the bar's mug indicator. |
+| Settings | Opens the settings panel: look, edge shape, screen rotation, when the rails slide away, one rail or two, button sounds. |
 | Rotate | Tap to swap landscape and portrait; hold to turn the screen upside down. |
+| Stay awake | While lit: no screensaver, no auto-lock, no screen-off. Same state as the bar's mug indicator. |
 | Brightness | A rocker: plus at the top, minus at the bottom, hold to keep going. It fills from the bottom to show the current level. |
 | Volume | The same rocker for volume; tap the speaker in the middle to mute. Uses Omarchy's own commands, so its on-screen display shows too. |
+| Back | Goes back in the focused app, as on a phone (it sends Alt+Left: back in browsers, file managers and most apps with a history); closes the app drawer or the settings panel if one is open. Hold for forward. Where the left thumb rests. |
+| Apps | Opens the app drawer: every app, big, on nearly the whole screen. Drag or flick to scroll, tap to launch. Hold for Omarchy's own launcher (which has search, and wants a keyboard). Three fingers up opens the drawer too. |
+| ‹ | Previous workspace, level with "next" on the right rail. Hold to take the focused window along. |
 | Paste | Pastes into the focused app; hold to copy instead. Uses the terminal's own shortcuts in a terminal. |
 | Play / pause | Hold for the next track. |
-| ‹ | Previous workspace, at the same height as "next" on the right rail, so each direction is under its own thumb. Hold to take the focused window along. |
-| Apps | Opens the app drawer: every app, big, on nearly the whole screen. Drag or flick to scroll, tap to launch. Hold for Omarchy's own launcher (which has search, and wants a keyboard). Three fingers up opens the drawer too. |
-| Back | Goes back in the focused app, as on a phone (it sends Alt+Left: back in browsers, file managers and most apps with a history); closes the app drawer or the settings panel if one is open. Hold for forward. |
 
 `tablet-mode rails right` puts everything except the media, volume and brightness controls on a single right-hand rail (hold Stay awake there for the settings panel); `tablet-mode rails both` brings the second one back. An upright screen always gets the single rail, along the bottom edge.
 

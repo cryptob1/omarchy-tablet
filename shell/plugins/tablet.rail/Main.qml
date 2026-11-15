@@ -4,15 +4,15 @@
 // TWO RAILS (the default, `tablet-mode rails both`): held in both hands, a big
 // tablet has a thumb on each edge, and the lower a button is the easier it is
 // to reach. So the buttons are split by hand and ordered bottom-up by use:
-//   right, bottom up   mic, enter, NEXT workspace (with the number above
-//                      it), keyboard, switch window, the scroll strip,
-//                      maximise, and close at the top
-//   left, bottom up    back (hold: forward), the app drawer, PREVIOUS workspace
-//                      level with "next" on the right, play-pause (hold: next
-//                      track), paste (hold: copy), a volume
-//                      rocker and a brightness rocker (plus / minus, hold to
-//                      repeat, filled to show the level; tap the speaker to
-//                      mute), and stay awake at the top
+//   right, top down    close, maximise, the workspace number, the scroll
+//                      strip, then where the thumb rests: mic, enter, NEXT
+//                      workspace, keyboard, switch window
+//   left, top down     settings, rotate, stay awake; a brightness rocker and a
+//                      volume rocker (plus / minus, hold to repeat, filled to
+//                      show the level; tap the speaker to mute); then where
+//                      the thumb rests: back (hold: forward), the app drawer,
+//                      PREVIOUS workspace level with "next", paste (hold:
+//                      copy), play-pause (hold: next track)
 // `tablet-mode rails right`, or an upright screen, gives the single rail
 // described below, which has no media or volume buttons.
 //
@@ -1982,6 +1982,13 @@ Item {
         rowSpacing: 10
         columnSpacing: 10
 
+        // The right hand (see the left rail for the reasoning). Close at the
+        // top, where it cannot be hit by accident; the scroll wheel through the
+        // upper reach; the mic where the thumb rests, because it is HELD while
+        // you speak and the hand is carrying the tablet; Enter under it, to
+        // send what you said; next workspace level with "previous"; keyboard
+        // and window switch in the corner. (Buttons marked !dual belong to the
+        // one-rail layout, where this rail carries everything.)
         TouchButton {
 
           skin: root.skin
@@ -2006,29 +2013,7 @@ Item {
           glyph: "󰊓"
           onTapped: root.toggleMaximise()
         }
-        TouchButton {
-          skin: root.skin
-          onPressedDown: root.click()
-          Layout.alignment: Qt.AlignCenter
-          visible: !root.dual
-          glyph: "󰀻"
-          active: root.drawerOpen
-          holdMs: 600
-          onTapped: root.drawerOpen = !root.drawerOpen
-          onHeld: { root.drawerOpen = false; root.run(["omarchy-menu", "toggle", "apps"]) }
-        }
-        // Back (hold: forward). One rail: beside the launcher.
-        TouchButton {
-          skin: root.skin
-          onPressedDown: root.click()
-          Layout.alignment: Qt.AlignCenter
-          visible: !root.dual
-          glyph: "󰅁"
-          heldGlyph: "󰅂"
-          holdMs: 500
-          onTapped: root.goBack()
-          onHeld: root.goForward()
-        }
+
         TouchButton {
           skin: root.skin
           onPressedDown: root.click()
@@ -2041,8 +2026,7 @@ Item {
           heldGlyph: "󰒓"
           onHeld: root.settingsOpen = true
         }
-        // Turn the screen: tap swaps landscape and portrait, hold turns it
-        // upside down. Lit while it follows the sensor ("auto").
+
         TouchButton {
           skin: root.skin
           onPressedDown: root.click()
@@ -2055,53 +2039,6 @@ Item {
           onHeld: root.run([root.home + "/.local/bin/tablet-mode", "rotate", "flip"])
         }
 
-        ScrollStrip {
-
-          skin: root.skin
-          Layout.alignment: Qt.AlignCenter
-          Layout.fillHeight: !rail.upright
-          Layout.fillWidth: rail.upright
-          horizontal: rail.upright
-          onAim: root.run([root.home + "/.local/bin/tablet-touch", "scroll-aim"])
-          // It is drawn as a wheel, so it turns like one: roll it DOWN and the
-          // page scrolls down (the text moves up). The reverse of a finger on
-          // the content itself, which drags the text with it; on a wheel that
-          // felt backwards.
-          onWheel: (notches) => Quickshell.execDetached(["ydotool", "mousemove", "--wheel", "-x", "0", "-y", String(-notches)])
-        }
-
-        TouchButton {
-
-          skin: root.skin
-
-          onPressedDown: root.click()
-          Layout.alignment: Qt.AlignCenter
-          glyph: "󰓡"
-          onTapped: root.run([root.home + "/.local/bin/tablet-touch", "next-window"])
-        }
-
-        TouchButton {
-
-          skin: root.skin
-
-          onPressedDown: root.click()
-          Layout.alignment: Qt.AlignCenter
-          glyph: "󰌌"
-          onTapped: root.run([root.home + "/.local/bin/tablet-osk", "toggle"])
-        }
-        TouchButton {
-
-          skin: root.skin
-
-          onPressedDown: root.click()
-          Layout.alignment: Qt.AlignCenter
-          visible: !root.dual      // two rails: this arrow is on the left one
-          glyph: "󰁍"
-          heldGlyph: "󰖯"
-          holdMs: root.carryMs
-          onTapped: root.wsTapped("r-1")
-          onHeld: root.wsHeld("r-1")
-        }
         Rectangle {
           Layout.alignment: Qt.AlignCenter
           implicitWidth: 30; implicitHeight: 22
@@ -2120,6 +2057,56 @@ Item {
             font.bold: true
           }
         }
+
+        ScrollStrip {
+
+          skin: root.skin
+          Layout.alignment: Qt.AlignCenter
+          Layout.fillHeight: !rail.upright
+          Layout.fillWidth: rail.upright
+          horizontal: rail.upright
+          onAim: root.run([root.home + "/.local/bin/tablet-touch", "scroll-aim"])
+          // It is drawn as a wheel, so it turns like one: roll it DOWN and the
+          // page scrolls down (the text moves up). The reverse of a finger on
+          // the content itself, which drags the text with it; on a wheel that
+          // felt backwards.
+          onWheel: (notches) => Quickshell.execDetached(["ydotool", "mousemove", "--wheel", "-x", "0", "-y", String(-notches)])
+        }
+
+        MicButton {
+          skin: root.skin
+          Layout.alignment: Qt.AlignCenter
+          visible: root.hasMic
+          size: 50
+          prominent: true
+          listening: root.listening
+          busy: root.busy
+          onDown: root.micPress()
+          onUp: root.micRelease()
+        }
+
+        TouchButton {
+          skin: root.skin
+          onPressedDown: root.click()
+          Layout.alignment: Qt.AlignCenter
+          glyph: "󰌑"
+          onTapped: root.run(["ydotool", "key", "28:1", "28:0"])
+        }
+
+        TouchButton {
+
+          skin: root.skin
+
+          onPressedDown: root.click()
+          Layout.alignment: Qt.AlignCenter
+          visible: !root.dual      // two rails: this arrow is on the left one
+          glyph: "󰁍"
+          heldGlyph: "󰖯"
+          holdMs: root.carryMs
+          onTapped: root.wsTapped("r-1")
+          onHeld: root.wsHeld("r-1")
+        }
+
         TouchButton {
           skin: root.skin
           onPressedDown: root.click()
@@ -2135,19 +2122,44 @@ Item {
           skin: root.skin
           onPressedDown: root.click()
           Layout.alignment: Qt.AlignCenter
-          glyph: "󰌑"
-          onTapped: root.run(["ydotool", "key", "28:1", "28:0"])
+          visible: !root.dual
+          glyph: "󰀻"
+          active: root.drawerOpen
+          holdMs: 600
+          onTapped: root.drawerOpen = !root.drawerOpen
+          onHeld: { root.drawerOpen = false; root.run(["omarchy-menu", "toggle", "apps"]) }
         }
-        MicButton {
+
+        TouchButton {
           skin: root.skin
+          onPressedDown: root.click()
           Layout.alignment: Qt.AlignCenter
-          visible: root.hasMic
-          size: 50
-          prominent: true
-          listening: root.listening
-          busy: root.busy
-          onDown: root.micPress()
-          onUp: root.micRelease()
+          visible: !root.dual
+          glyph: "󰅁"
+          heldGlyph: "󰅂"
+          holdMs: 500
+          onTapped: root.goBack()
+          onHeld: root.goForward()
+        }
+
+        TouchButton {
+
+          skin: root.skin
+
+          onPressedDown: root.click()
+          Layout.alignment: Qt.AlignCenter
+          glyph: "󰌌"
+          onTapped: root.run([root.home + "/.local/bin/tablet-osk", "toggle"])
+        }
+
+        TouchButton {
+
+          skin: root.skin
+
+          onPressedDown: root.click()
+          Layout.alignment: Qt.AlignCenter
+          glyph: "󰓡"
+          onTapped: root.run([root.home + "/.local/bin/tablet-touch", "next-window"])
         }
       }
     }
@@ -2266,6 +2278,15 @@ Item {
         anchors.margins: 7
         spacing: 10
 
+        // LAID OUT FOR THE HAND THAT HOLDS IT. A 13-inch tablet has weight: you
+        // grip it low on each side, palm under the corner, and the thumb rests
+        // about two thirds of the way down the screen. From there it reaches
+        // up easily, down with a curl, and the top third not at all without
+        // letting go. So, down this rail: what you rarely want (settings,
+        // rotate, stay awake) at the top, out of reach on purpose; the two
+        // rockers in the upper reach; then Back where the thumb rests, the app
+        // drawer under it, previous workspace level with "next" on the other
+        // rail, and paste and play / pause in the corner, the least easy place.
         TouchButton {
           skin: root.skin
           onPressedDown: root.click()
@@ -2274,18 +2295,7 @@ Item {
           active: root.settingsOpen
           onTapped: root.settingsOpen = !root.settingsOpen
         }
-        TouchButton {
 
-          skin: root.skin
-
-          onPressedDown: root.click()
-          Layout.alignment: Qt.AlignCenter
-          glyph: root.stayAwake ? "󰅶" : "󰛊"
-          active: root.stayAwake
-          onTapped: root.toggleStayAwake()
-        }
-        // Turn the screen: tap swaps landscape and portrait, hold turns it
-        // upside down. Lit while it follows the sensor ("auto").
         TouchButton {
           skin: root.skin
           onPressedDown: root.click()
@@ -2297,9 +2307,19 @@ Item {
           onHeld: root.run([root.home + "/.local/bin/tablet-mode", "rotate", "flip"])
         }
 
+        TouchButton {
+
+          skin: root.skin
+
+          onPressedDown: root.click()
+          Layout.alignment: Qt.AlignCenter
+          glyph: root.stayAwake ? "󰅶" : "󰛊"
+          active: root.stayAwake
+          onTapped: root.toggleStayAwake()
+        }
+
         Item { Layout.fillHeight: true }
 
-        // Brightness and volume, each a rocker that shows its level.
         Rocker {
           skin: root.skin
           onPressedDown: root.click()
@@ -2309,6 +2329,7 @@ Item {
           onUp: root.brightnessStep("+5%")
           onDown: root.brightnessStep("5%-")
         }
+
         Rocker {
           skin: root.skin
           onPressedDown: root.click()
@@ -2321,42 +2342,17 @@ Item {
           onMiddle: root.run(["omarchy-audio-output-volume", "mute-toggle"])
         }
 
-        Item { Layout.fillHeight: true }
-
-        // Paste into the focused app (hold: copy). Above the workspace arrow on the left rail.
         TouchButton {
           skin: root.skin
           onPressedDown: root.click()
           Layout.alignment: Qt.AlignCenter
-          glyph: "󰆒"
-          heldGlyph: "󰆏"
+          glyph: "󰅁"
+          heldGlyph: "󰅂"
           holdMs: 500
-          onTapped: root.run([root.home + "/.local/bin/tablet-touch", "paste-here"])
-          onHeld: root.run([root.home + "/.local/bin/tablet-touch", "copy-here"])
+          onTapped: root.goBack()
+          onHeld: root.goForward()
         }
-        // Play / pause; hold for the next track.
-        TouchButton {
-          skin: root.skin
-          onPressedDown: root.click()
-          Layout.alignment: Qt.AlignCenter
-          glyph: "󰐎"
-          heldGlyph: "󰒭"
-          holdMs: root.carryMs
-          onTapped: root.run(["omarchy-shell", "media", "playPause"])
-          onHeld: root.run(["omarchy-shell", "media", "next"])
-        }
-        // Previous workspace here, next on the right rail: each under its own thumb,
-        // and at the same height (third from the bottom on both rails).
-        TouchButton {
-          skin: root.skin
-          onPressedDown: root.click()
-          Layout.alignment: Qt.AlignCenter
-          glyph: "󰁍"
-          heldGlyph: "󰖯"
-          holdMs: root.carryMs
-          onTapped: root.wsTapped("r-1")
-          onHeld: root.wsHeld("r-1")
-        }
+
         TouchButton {
 
           skin: root.skin
@@ -2369,16 +2365,38 @@ Item {
           onTapped: root.drawerOpen = !root.drawerOpen
           onHeld: { root.drawerOpen = false; root.run(["omarchy-menu", "toggle", "apps"]) }
         }
-        // Back (hold: forward). Bottom of the left rail: under the thumb, where a phone has it.
+
         TouchButton {
           skin: root.skin
           onPressedDown: root.click()
           Layout.alignment: Qt.AlignCenter
-          glyph: "󰅁"
-          heldGlyph: "󰅂"
+          glyph: "󰁍"
+          heldGlyph: "󰖯"
+          holdMs: root.carryMs
+          onTapped: root.wsTapped("r-1")
+          onHeld: root.wsHeld("r-1")
+        }
+
+        TouchButton {
+          skin: root.skin
+          onPressedDown: root.click()
+          Layout.alignment: Qt.AlignCenter
+          glyph: "󰆒"
+          heldGlyph: "󰆏"
           holdMs: 500
-          onTapped: root.goBack()
-          onHeld: root.goForward()
+          onTapped: root.run([root.home + "/.local/bin/tablet-touch", "paste-here"])
+          onHeld: root.run([root.home + "/.local/bin/tablet-touch", "copy-here"])
+        }
+
+        TouchButton {
+          skin: root.skin
+          onPressedDown: root.click()
+          Layout.alignment: Qt.AlignCenter
+          glyph: "󰐎"
+          heldGlyph: "󰒭"
+          holdMs: root.carryMs
+          onTapped: root.run(["omarchy-shell", "media", "playPause"])
+          onHeld: root.run(["omarchy-shell", "media", "next"])
         }
       }
     }
