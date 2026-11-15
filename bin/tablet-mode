@@ -28,8 +28,8 @@ Reactions:
                                      sensor, where it has one (needs iio-sensor-proxy)
     tablet-mode rotate toggle|flip   swap landscape and portrait; turn upside down
     tablet-mode edge <shape>         the shape of the rails' inside edges, with a
-                                     controller look: straight, lightning, wave,
-                                     scallop, flame, saw
+                                     controller look: auto (each look's own),
+                                     straight, lightning, wave, scallop, flame, saw
     tablet-mode hide <seconds>       slide the rails away after this long without a
                                      touch (0: never); the next touch brings them back
     tablet-mode buttons <shape>      the buttons' shape: auto (each look's own),
@@ -323,7 +323,7 @@ def main():
         write(os.path.join(STATE_DIR, "rails"), cmd[1])
     elif cmd[0] == "look" and len(cmd) == 2 and cmd[1] in LOOKS:
         write(os.path.join(STATE_DIR, "look"), cmd[1])
-    elif cmd[0] == "edge" and len(cmd) == 2 and cmd[1] in ("straight", "lightning", "wave", "scallop", "flame", "saw"):
+    elif cmd[0] == "edge" and len(cmd) == 2 and cmd[1] in ("auto", "straight", "lightning", "wave", "scallop", "flame", "saw"):
         write(os.path.join(STATE_DIR, "edge"), cmd[1])
     elif cmd[0] == "hide" and len(cmd) == 2 and cmd[1].isdigit():
         write(os.path.join(STATE_DIR, "hide"), cmd[1])

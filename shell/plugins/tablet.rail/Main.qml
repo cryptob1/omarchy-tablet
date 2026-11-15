@@ -119,25 +119,25 @@ Item {
         cap: Qt.darker(bg, 1.25), legend: Color.popups.text, accent: ac, close: Color.urgent,
         pattern: "spots", ink: Qt.alpha(Qt.darker(ac, 3.4), 0.62), glow: Qt.alpha(Qt.lighter(ac, 1.5), 0.55) }
     case "tiger": return {
-        label: "Tiger", shellTop: "#f7a02b", shellBottom: "#d8660a", cap: "#1c130d", legend: "#ffe7c2",
+        label: "Tiger", edge: "saw", shellTop: "#f7a02b", shellBottom: "#d8660a", cap: "#1c130d", legend: "#ffe7c2",
         accent: "#ffd23f", close: "#ff5a4d", pattern: "stripes", ink: "#d91a0f08", glow: "transparent" }
     case "arcade": return {
-        label: "Arcade", shape: "round", shellTop: "#2d2f3d", shellBottom: "#14151c", cap: "#0b0c11", legend: "#f4f4f4",
+        label: "Arcade", edge: "lightning", shape: "round", shellTop: "#2d2f3d", shellBottom: "#14151c", cap: "#0b0c11", legend: "#f4f4f4",
         accent: "#ffcc00", close: "#ff3b3b", pattern: "confetti", ink: "#ff3b3b", glow: "#2ec4ff" }
     case "neon": return {
-        label: "Neon", shape: "rounded", shellTop: "#2c1052", shellBottom: "#110423", cap: "#0d0420", legend: "#3ef0ff",
+        label: "Neon", edge: "lightning", shape: "rounded", shellTop: "#2c1052", shellBottom: "#110423", cap: "#0d0420", legend: "#3ef0ff",
         accent: "#ff2fd0", close: "#ff4f7a", pattern: "grid", ink: "#59ff2fd0", glow: "#803ef0ff" }
     case "retro": return {
         label: "Retro", shape: "rounded", shellTop: "#dcd9d2", shellBottom: "#b8b4aa", cap: "#3a393e", legend: "#f3f1ea",
         accent: "#c8102e", close: "#ff6b6b", pattern: "ridges", ink: "#1f000000", glow: "#40ffffff" }
     case "candy": return {
-        label: "Candy", shellTop: "#ff9ecf", shellBottom: "#ffc48a", cap: "#fff6fb", legend: "#d6336c",
+        label: "Candy", edge: "scallop", shellTop: "#ff9ecf", shellBottom: "#ffc48a", cap: "#fff6fb", legend: "#d6336c",
         accent: "#7c4dff", close: "#e03131", pattern: "dots", ink: "#8cffffff", glow: "transparent" }
     case "lava": return {
-        label: "Lava", shellTop: "#3c0e05", shellBottom: "#130302", cap: "#1b0806", legend: "#ffb36b",
+        label: "Lava", edge: "flame", shellTop: "#3c0e05", shellBottom: "#130302", cap: "#1b0806", legend: "#ffb36b",
         accent: "#ff5a1f", close: "#ff3b30", pattern: "spots", ink: "#99ff4d0a", glow: "#e6ffd166" }
     case "galaxy": return {
-        label: "Galaxy", shellTop: "#1a1f63", shellBottom: "#3d1569", cap: "#0e0f2e", legend: "#dcd6ff",
+        label: "Galaxy", edge: "lightning", shellTop: "#1a1f63", shellBottom: "#3d1569", cap: "#0e0f2e", legend: "#dcd6ff",
         accent: "#9d7bff", close: "#ff6b9a", pattern: "stars", ink: "#ffffff", glow: "#b3c8b6ff" }
     case "ice": return {
         label: "Ice", shellTop: "#eaf8ff", shellBottom: "#bfe4f6", cap: "#f8fdff", legend: "#1f6f96",
@@ -147,40 +147,40 @@ Item {
     // "pixels" as random blocks); patterns joined with "+" are painted in turn.
     // `rim` gives the shell a thick coloured edge.
     case "rainbow": return {
-        label: "Rainbow", shellTop: "#9bdcff", shellBottom: "#e6f7ff", cap: "#ffffff", legend: "#3a6ea5",
+        label: "Rainbow", edge: "wave", shellTop: "#9bdcff", shellBottom: "#e6f7ff", cap: "#ffffff", legend: "#3a6ea5",
         accent: "#ff5fa2", close: "#e03131", pattern: "wash+chars", ink: "transparent", glow: "transparent",
         palette: ["#8fd6ff", "#bfe9ff", "#e9f8ff"],
         chars: ["\ud83c\udf08", "\ud83c\udf08", "\u2601\ufe0f", "\u2b50", "\u2600\ufe0f"] }
     case "prism": return {
-        label: "Prism", shellTop: "#ff4d4d", shellBottom: "#7a5cff", cap: "#ffffff", legend: "#3a3a4a",
+        label: "Prism", edge: "saw", shellTop: "#ff4d4d", shellBottom: "#7a5cff", cap: "#ffffff", legend: "#3a3a4a",
         accent: "#ff3fa4", close: "#e03131", pattern: "bands", ink: "transparent", glow: "transparent",
         barText: "#1b1c22",
         palette: ["#ff4d4d", "#ff9a3c", "#ffe14d", "#4cd964", "#3fb8ff", "#7a5cff", "#d65cff"] }
     case "unicorn": return {
-        label: "Unicorn", shellTop: "#ffd1ec", shellBottom: "#c8f7e4", cap: "#ffffff", legend: "#a25bd6",
+        label: "Unicorn", edge: "scallop", shellTop: "#ffd1ec", shellBottom: "#c8f7e4", cap: "#ffffff", legend: "#a25bd6",
         accent: "#ff7ac8", close: "#e0457b", pattern: "wash+stars+chars", ink: "#ffffff", glow: "#e6ffd700",
         palette: ["#ffd1ec", "#e3ccff", "#c9e4ff", "#c8f7e4", "#fff3c4"],
         chars: ["\ud83e\udd84", "\ud83e\udd84", "\ud83c\udf08", "\u2b50", "\ud83d\udc96"] }
     case "fairy": return {
-        label: "Fairy", shellTop: "#2b1055", shellBottom: "#1b8a7a", cap: "#1a0b33", legend: "#ffe9a8",
+        label: "Fairy", edge: "wave", shellTop: "#2b1055", shellBottom: "#1b8a7a", cap: "#1a0b33", legend: "#ffe9a8",
         accent: "#3ee6c1", close: "#ff7aa8", pattern: "wash+stars+chars", ink: "#ffe9a8", glow: "#ff9ff3",
         palette: ["#2b1055", "#4a1f7a", "#1f5f7a", "#1b8a7a"],
         chars: ["\ud83e\uddda", "\ud83e\uddda", "\u2728", "\ud83c\udf44", "\ud83e\udd8b", "\ud83c\udf38"] }
     case "mermaid": return {
-        label: "Mermaid", shellTop: "#14c9c0", shellBottom: "#7a5cd6", cap: "#0b2a44", legend: "#aef6ee",
+        label: "Mermaid", edge: "wave", shellTop: "#14c9c0", shellBottom: "#7a5cd6", cap: "#0b2a44", legend: "#aef6ee",
         accent: "#ff7fd1", close: "#ff6b6b", pattern: "wash+scales+chars", ink: "#40ffffff", glow: "#1a000000",
         palette: ["#14c9c0", "#1e8fd6", "#7a5cd6"],
         chars: ["\ud83e\udddc", "\ud83e\udddc", "\ud83d\udc1a", "\ud83d\udc20", "\ud83e\udee7", "\u2b50"] }
     case "dragon": return {
-        label: "Dragon", shellTop: "#0f3d1e", shellBottom: "#050d08", cap: "#0a1a0f", legend: "#e8c66a",
+        label: "Dragon", edge: "saw", shellTop: "#0f3d1e", shellBottom: "#050d08", cap: "#0a1a0f", legend: "#e8c66a",
         accent: "#e03131", close: "#ff5a4d", pattern: "wash+scales", ink: "#80d4af37", glow: "#59000000",
         palette: ["#14502a", "#0a2413", "#050d08"] }
     case "sunset": return {
-        label: "Sunset", shellTop: "#ffd76b", shellBottom: "#3b2a8c", cap: "#2a1540", legend: "#ffe6c7",
+        label: "Sunset", edge: "wave", shellTop: "#ffd76b", shellBottom: "#3b2a8c", cap: "#2a1540", legend: "#ffe6c7",
         accent: "#ffd23f", close: "#ff6b6b", pattern: "wash+ridges", ink: "#12000000", glow: "#14ffffff",
         palette: ["#ffd76b", "#ff9a4d", "#ff5e7a", "#b04adf", "#3b2a8c"] }
     case "watermelon": return {
-        label: "Watermelon", shellTop: "#ff6b88", shellBottom: "#f03a5f", cap: "#f6fff2", legend: "#2f9e44",
+        label: "Watermelon", edge: "scallop", shellTop: "#ff6b88", shellBottom: "#f03a5f", cap: "#f6fff2", legend: "#2f9e44",
         accent: "#2f9e44", close: "#c92a2a", pattern: "seeds", ink: "#2b1a1f", glow: "#73ffffff", rim: "#37b24d" }
     case "honeybee": return {
         label: "Honeybee", shellTop: "#ffd43b", shellBottom: "#f5a700", cap: "#1c1a14", legend: "#ffd43b",
@@ -305,10 +305,18 @@ Item {
   // `overhang` px over the edge of the windows (drawn over them; touches there
   // still go to the window), and the recess, its lip and its shadow follow the
   // same outline. Only with a controller look, in the closed two-edge frame.
-  property string edgePref: "straight"
+  // "auto" (the default) is each look's own edge, as with the buttons' shape:
+  // flames on Lava, lightning on Galaxy, waves on Mermaid. Any other value
+  // overrides it for every look.
+  property string edgePref: "auto"
+  readonly property string edgeShape: {
+    var want = edgePref.trim()
+    if (edgeNames.indexOf(want) >= 0) return want
+    return skin && skin.edge && edgeNames.indexOf(skin.edge) >= 0 ? skin.edge : "straight"
+  }
   readonly property var edgeNames: ["straight", "lightning", "wave", "scallop", "flame", "saw"]
   readonly property int overhang: 15
-  readonly property bool shaped: framed && edgePref.trim() !== "straight" && edgeNames.indexOf(edgePref.trim()) > 0
+  readonly property bool shaped: framed && edgeShape !== "straight"
   // How far the edge stands out at each 2 px down a rail `h` tall: a list of
   // numbers in [0, overhang]. It eases to nothing at both ends, so the corners
   // where the rails meet the bar and the bezel stay as they are. Seeded, so
@@ -371,14 +379,14 @@ Item {
   }
   readonly property real railHeight: Quickshell.screens.length > 0
     ? Quickshell.screens[0].height - Style.bar.sizeHorizontal - bezel : 0
-  readonly property var profileLeft: shaped ? edgeProfile(edgePref.trim(), railHeight, 17) : []
-  readonly property var profileRight: shaped ? edgeProfile(edgePref.trim(), railHeight, 41) : []
+  readonly property var profileLeft: shaped ? edgeProfile(edgeShape, railHeight, 17) : []
+  readonly property var profileRight: shaped ? edgeProfile(edgeShape, railHeight, 41) : []
   // The bar's lower edge and the bezel's upper one take the same outline, so
   // the shape runs all the way round the screen.
   readonly property real spanWidth: Quickshell.screens.length > 0
     ? Quickshell.screens[0].width - railSize * (dual ? 2 : 1) : 0
-  readonly property var profileTop: shaped ? edgeProfile(edgePref.trim(), spanWidth, 59) : []
-  readonly property var profileBottom: shaped ? edgeProfile(edgePref.trim(), spanWidth, 83) : []
+  readonly property var profileTop: shaped ? edgeProfile(edgeShape, spanWidth, 59) : []
+  readonly property var profileBottom: shaped ? edgeProfile(edgeShape, spanWidth, 83) : []
   function setEdge(v) { edgePref = v; run([home + "/.local/bin/tablet-mode", "edge", v]) }
 
   // `tablet-mode buttons auto|round|rounded|square`: the buttons' SHAPE. Round
@@ -760,7 +768,7 @@ Item {
     printErrors: false
     onFileChanged: reload()
     onLoaded: root.edgePref = text()
-    onLoadFailed: root.edgePref = "straight"
+    onLoadFailed: root.edgePref = "auto"
   }
 
   FileView {
@@ -3158,7 +3166,7 @@ Item {
             { key: "buttons", title: "Buttons", narrow: true, options: [
                 { v: "auto", l: "Look's own" }, { v: "round", l: "Round" }, { v: "rounded", l: "Rounded" }, { v: "square", l: "Square" }] },
             { key: "edge", title: "Edge", narrow: true, options: [
-                { v: "straight", l: "Straight" }, { v: "lightning", l: "Lightning" }, { v: "wave", l: "Wave" },
+                { v: "auto", l: "Look's own" }, { v: "straight", l: "Straight" }, { v: "lightning", l: "Lightning" }, { v: "wave", l: "Wave" },
                 { v: "scallop", l: "Scallop" }, { v: "flame", l: "Flame" }, { v: "saw", l: "Saw" }] },
             { key: "hide", title: "Slide away when idle", narrow: true, options: [
                 { v: "0", l: "Never" }, { v: "10", l: "10 s" }, { v: "30", l: "30 s" }, { v: "60", l: "1 min" }, { v: "300", l: "5 min" }] },
@@ -3171,7 +3179,7 @@ Item {
             readonly property string current: modelData.key === "hide" ? String(Math.round(root.railHideMs / 1000))
               : modelData.key === "buttons" ? (root.buttonShapes[root.buttonsPref.trim()] !== undefined ? root.buttonsPref.trim() : "auto")
               : modelData.key === "edge"
-              ? (root.edgeNames.indexOf(root.edgePref.trim()) >= 0 ? root.edgePref.trim() : "straight")
+              ? (root.edgeNames.indexOf(root.edgePref.trim()) >= 0 ? root.edgePref.trim() : "auto")
               : modelData.key === "rotation" ? root.rotationPref.trim()
               : (modelData.key === "rails" ? (root.railsPref.trim() === "right" ? "right" : "both")
                                            : (root.soundsPref.trim() === "on" ? "on" : "off"))
@@ -3184,7 +3192,7 @@ Item {
                 required property var modelData
                 readonly property bool on: sw2.current === modelData.v
                 readonly property bool off: !!modelData.off
-                implicitWidth: sw2.modelData.narrow ? 88 : 126; implicitHeight: 38; radius: 19
+                implicitWidth: sw2.modelData.narrow ? (sw2.modelData.options.length > 6 ? 78 : 88) : 126; implicitHeight: 38; radius: 19
                 color: on ? Color.accent : Qt.alpha(Color.popups.text, 0.08)
                 border.width: on ? 0 : 1
                 border.color: Qt.alpha(Color.popups.text, 0.2)
