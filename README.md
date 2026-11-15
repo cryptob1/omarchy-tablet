@@ -1,29 +1,51 @@
 # omarchy-tablet
 
-**Omarchy, on a tablet.**
+**Omarchy, on a tablet.** Two rails of touch controls, gestures, an on-screen keyboard and 24 looks, for [Omarchy](https://omarchy.org) with the keyboard off.
 
 ![A terminal set into the frame, in the Metal look](docs/hero.png)
 
+```sh
+git clone https://github.com/cryptob1/omarchy-tablet
+cd omarchy-tablet && ./install.sh
+tablet-mode set tablet
+```
+
+Needs Omarchy 4 and a touchscreen. `./uninstall.sh` takes it all out again. [More on installing.](#install)
+
+## Why
+
 Big tablets have never been good computers. The hardware has been ready for years: a 13-inch slate today has a screen as large as a laptop's and a processor that keeps up with one. What has never arrived is software that makes use of it. A phone interface stretched across thirteen inches wastes the screen. A desktop interface with the keyboard taken away is worse: there is no way to close a window, switch to another one, or type a password. So the big tablet ends up as the device you watch films on, next to the computer you actually work on.
 
-[Omarchy](https://omarchy.org) showed what a laptop feels like when someone cares about every detail: simple, elegant, fast, and beautiful to look at. Nothing in the way, nothing you did not ask for, everything one keystroke from where you are. But all of it assumes a keyboard.
+Omarchy showed what a laptop feels like when someone cares about every detail: simple, elegant, fast, and beautiful to look at. Nothing in the way, nothing you did not ask for, everything one keystroke from where you are. But all of it assumes a keyboard.
 
 omarchy-tablet brings the same care to the tablet. Detach the keyboard and Omarchy stays Omarchy, the same windows, the same workspaces, the same theme, with everything the keyboard did now under your thumbs:
 
 - **Two rails, one for each hand.** You hold a big tablet by its edges, so that is where the controls are, and the ones you use most sit lowest, where your thumbs already rest.
 - **Gestures for getting around.** Three fingers to move between workspaces and windows, four to maximise.
-- **A terminal you can use with a finger.** Drag to scroll, hold and drag to select. Tiling window managers live in the terminal; a tablet that cannot use one is not a computer.
+- **A terminal you can use with a finger.** Hold and drag to select, a scroll wheel on the rail to scroll. Tiling window managers live in the terminal; a tablet that cannot use one is not a computer.
 - **A keyboard when you need one**, including on the lock screen, and a push-to-talk mic for when you would rather speak.
-- **It looks like it belongs**, or like a game controller, if you would rather hold one of those.
+- **It looks like it belongs**, or like something you are holding: a game controller, a slab of brushed metal, a spaceship.
 
 No compositor plugin to rebuild on every update, and no new desktop to learn. It is a shell plugin, one small service that reads the touchscreen, and a few scripts.
 
+## Make it yours
+
+Twenty-four looks, from plain Omarchy to a ship's hull. Each one changes the shell, the buttons, their legends and the top bar together, and you switch between them from a settings panel on the rail.
+
+![Six of the looks, full screen: Cheetah, Unicorn, Spaceship, Wood, Neon, Galaxy](docs/gallery.png)
+
+![The rails of all 24 looks](docs/looks.png)
+
+The edge that faces the screen does not have to be straight. Lightning, wave, scallop, flame or saw, on any look:
+
+![Shaped edges: Lava with flames, Galaxy with lightning, Mermaid with waves](docs/edges.png)
+
 | | |
 |---|---|
-| ![The plain Omarchy look](docs/plain.png) | ![The settings panel](docs/settings.png) |
-| The default look follows your Omarchy theme. | The settings panel: looks, rotation, one rail or two, button sounds. |
-| ![The Spaceship look](docs/spaceship.png) | ![The Wood look](docs/wood.png) |
-| Spaceship: hull plates, warning stripes, status lights. | Wood: grain, knots and a split or two. |
+| ![Close-up: buttons in their sockets, the screen recessed into the frame](docs/closeup.png) | ![The settings panel](docs/settings.png) |
+| Made to look like a thing you are holding: buttons sit in sockets and sink when pressed, and the screen is set down into the frame. | The settings panel: look, edge shape, rotation, when the rails slide away, one rail or two, button sounds. |
+| ![The plain Omarchy look](docs/plain.png) | |
+| Or leave it plain: the default look is your Omarchy theme, nothing more. | |
 
 ## What you get
 
@@ -63,8 +85,6 @@ Every button's touch target is bigger than the button you see: it reaches out to
 `tablet-mode rails right` puts everything except the media, volume and brightness controls on a single right-hand rail (hold Stay awake there for the settings panel); `tablet-mode rails both` brings the second one back. An upright screen always gets the single rail, along the bottom edge.
 
 ### Looks
-
-<img src="docs/looks.png" alt="Controller, Cheetah, Tiger, Arcade, Neon, Retro, Candy, Lava, Galaxy, Ice" width="430"> <img src="docs/looks2.png" alt="Rainbow, Unicorn, Fairy, Mermaid, Dragon, Sunset, Watermelon, Honeybee, Circuit, Pixel" width="430"> <img src="docs/looks3.png" alt="Metal, Wood, Spaceship" width="300">
 
 By default the rails are drawn like every other Omarchy surface: your theme's colours, corner radius, border and gaps. Or pick a controller look, where the rails become a moulded shell flush with the screen edges, the buttons raised caps that sink when pressed, and the scroll strip a ridged thumb wheel:
 

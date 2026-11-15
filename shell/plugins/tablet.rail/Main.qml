@@ -407,7 +407,7 @@ Item {
   readonly property int hideAfterMs: 30000
   property bool awake: true
 
-  function touched() { awake = true; hideTimer.restart(); railsShown = true; railHideTimer.restart() }
+  function touched() { awake = true; hideTimer.restart(); railsShown = true; armRailHide() }
 
   // SLIDE AWAY. `tablet-mode hide <seconds>` (0: never, the default): after
   // that long without a touch anywhere on the screen, the rails and the
@@ -421,12 +421,22 @@ Item {
   property bool railsShown: true
   property real slide: railsShown ? 1 : 0          // 1: in place, 0: off the edge
   Behavior on slide { NumberAnimation { duration: 260; easing.type: Easing.OutCubic } }
-  onRailHideMsChanged: { railsShown = true; railHideTimer.restart() }
+  // Whether the rails may slide away at all right now.
+  readonly property bool railHideAllowed: noKeyboard && railHideMs > 0 && !listening && !busy && !settingsOpen
+  // (Re)start the countdown, or stop it. The timer is only ever driven from
+  // here: calling restart() on a Timer whose `running` is a binding starts it
+  // whatever the binding says, and with "never" that hid the rails one second
+  // after every touch.
+  function armRailHide() {
+    if (railHideAllowed) railHideTimer.restart()
+    else { railHideTimer.stop(); railsShown = true }
+  }
+  onRailHideAllowedChanged: armRailHide()
+  onRailHideMsChanged: { railsShown = true; armRailHide() }
   Timer {
     id: railHideTimer
     interval: Math.max(1000, root.railHideMs)
-    running: root.noKeyboard && root.railHideMs > 0 && !root.listening && !root.busy && !root.settingsOpen
-    onTriggered: root.railsShown = false
+    onTriggered: if (root.railHideAllowed) root.railsShown = false
   }
   function setHide(v) { hidePref = v; run([home + "/.local/bin/tablet-mode", "hide", v]) }
   FileView {
