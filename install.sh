@@ -70,7 +70,8 @@ systemctl --user restart tablet-gestures.service >/dev/null 2>&1 || true
   && systemctl --user enable --now tablet-mode-watch.service >/dev/null 2>&1 || true
 
 # --- the mic, if there is something for it to talk to ------------------------
-if [ -x "$HOME/.config/tablet-mode/mic-press" ] || [ -x "$HOME/.local/bin/cortex-ctl" ]; then
+if [ -x "$HOME/.config/tablet-mode/mic-press" ] || omarchy-default-dictation >/dev/null 2>&1 \
+   || [ -x "$HOME/.local/bin/cortex-ctl" ]; then
   "$HOME/.local/bin/tablet-mode" dictation on
 fi
 

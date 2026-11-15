@@ -161,15 +161,25 @@ def dictation_command(event):
     """argv for the dictation backend's press ("key-down") or release
     ("key-up"), or None if there is none.
 
-    DICTATION. The mic button is a push-to-talk key for whatever dictation tool
-    you use. Put two executables in ~/.config/tablet-mode/:
-        mic-press      run when the finger lands on the mic
-        mic-release    run when it lifts
-    Without them, `cortex-ctl key-down` / `key-up` is used if Cortex is
-    installed. `tablet-mode dictation on` shows the button."""
+    DICTATION. The mic button is a push-to-talk key. It uses, in this order:
+      1. your own commands, if ~/.config/tablet-mode/mic-press and
+         mic-release exist and are executable (press runs one, release the
+         other) — for a tool with its own idea of press and release;
+      2. Omarchy's default dictation (`omarchy-dictation start` / `stop`),
+         whichever backend `omarchy-default-dictation` names — so the button
+         follows Setup > Dictation with nothing to configure;
+      3. `cortex-ctl key-down` / `key-up`, if that is installed.
+    `tablet-mode dictation on` shows the button; install.sh turns it on when
+    any of the three is present."""
     hook = os.path.join(CONF_DIR, "mic-press" if event == "key-down" else "mic-release")
     if os.access(hook, os.X_OK):
         return [hook]
+    try:
+        default = subprocess.run(["omarchy-default-dictation"], capture_output=True, text=True, timeout=3)
+        if default.returncode == 0 and default.stdout.strip():
+            return ["omarchy-dictation", "start" if event == "key-down" else "stop"]
+    except (OSError, subprocess.SubprocessError):
+        pass
     if os.access(BIN + "cortex-ctl", os.X_OK):
         return [BIN + "cortex-ctl", event]
     return None

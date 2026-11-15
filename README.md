@@ -1,8 +1,27 @@
 # omarchy-tablet
 
-Touch controls for [Omarchy](https://omarchy.org) on a tablet or a 2-in-1 with the keyboard off: a rail of buttons on each edge of the screen, touchscreen gestures, an on-screen keyboard that works on the lock screen, and one-finger scrolling and text selection in terminals.
+**Omarchy, on a tablet.**
 
-Omarchy is built around the keyboard. Take the keyboard away and there is no way to close a window, switch workspace, open the launcher or type a Wi-Fi password. This fills that gap without a compositor plugin: it is a shell plugin, a small daemon that reads the touchscreen directly, and a few scripts.
+![A terminal between the two rails, in the Cheetah look](docs/hero.png)
+
+Big tablets have never been good computers. The hardware has been ready for years: a 13-inch slate today has a screen as large as a laptop's and a processor that keeps up with one. What has never arrived is software that makes use of it. A phone interface stretched across thirteen inches wastes the screen. A desktop interface with the keyboard taken away is worse: there is no way to close a window, switch to another one, or type a password. So the big tablet ends up as the device you watch films on, next to the computer you actually work on.
+
+[Omarchy](https://omarchy.org) showed what a laptop feels like when someone cares about every detail: simple, elegant, fast, and beautiful to look at. Nothing in the way, nothing you did not ask for, everything one keystroke from where you are. But all of it assumes a keyboard.
+
+omarchy-tablet brings the same care to the tablet. Detach the keyboard and Omarchy stays Omarchy, the same windows, the same workspaces, the same theme, with everything the keyboard did now under your thumbs:
+
+- **Two rails, one for each hand.** You hold a big tablet by its edges, so that is where the controls are, and the ones you use most sit lowest, where your thumbs already rest.
+- **Gestures for getting around.** Three fingers to move between workspaces and windows, four to maximise.
+- **A terminal you can use with a finger.** Drag to scroll, hold and drag to select. Tiling window managers live in the terminal; a tablet that cannot use one is not a computer.
+- **A keyboard when you need one**, including on the lock screen, and a push-to-talk mic for when you would rather speak.
+- **It looks like it belongs**, or like a game controller, if you would rather hold one of those.
+
+No compositor plugin to rebuild on every update, and no new desktop to learn. It is a shell plugin, one small service that reads the touchscreen, and a few scripts.
+
+| | |
+|---|---|
+| ![The plain Omarchy look](docs/plain.png) | ![The settings panel](docs/settings.png) |
+| The default look follows your Omarchy theme. | The settings panel: looks, one rail or two, button sounds. |
 
 ## What you get
 
@@ -21,7 +40,7 @@ A rail on each edge of the screen, shown while the machine is in tablet mode. Wi
 | Keyboard | Shows or hides the on-screen keyboard. |
 | n › | The current workspace number, and next workspace. Hold the arrow to take the focused window along. |
 | Enter | Sends Enter to the focused app. |
-| Mic | Push-to-talk for a dictation tool. Only shown if you have one set up (see [Dictation](#dictation)). |
+| Mic | Push-to-talk dictation, using Omarchy's default dictation backend (see [Dictation](#dictation)). |
 
 **Left rail**, top to bottom:
 
@@ -128,14 +147,16 @@ systemctl --user enable --now tablet-mode-watch.service
 
 ## Dictation
 
-The mic is a push-to-talk key for whatever dictation tool you use. Give it two executables:
+The mic is a push-to-talk key: hold it and speak, let go and the text is typed into the app you were in. It uses Omarchy's own dictation, whichever backend Omarchy is set to use (`omarchy-dictation start` on press, `stop` on release), so there is nothing to configure. The installer shows the button when a dictation backend is installed; `tablet-mode dictation on|off` shows or hides it by hand.
+
+To drive a different tool, give it two executables and it uses those instead:
 
 ```
 ~/.config/tablet-mode/mic-press      # run when the finger lands on the mic
 ~/.config/tablet-mode/mic-release    # run when it lifts
 ```
 
-then `tablet-mode dictation on`. If the tool writes `recording` / `transcribing` / `idle` to `$XDG_RUNTIME_DIR/tablet-mode/mic-state`, the button turns red while it listens and pulses while it transcribes.
+If the tool writes `recording` / `transcribing` / `idle` to `$XDG_RUNTIME_DIR/tablet-mode/mic-state`, the button turns red while it listens and pulses while it transcribes.
 
 The button never takes keyboard focus, and focus is held on the window you were writing in until dictation finishes, so the text lands where you meant it.
 
