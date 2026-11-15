@@ -356,6 +356,12 @@ Item {
     ? Quickshell.screens[0].height - Style.bar.sizeHorizontal - bezel : 0
   readonly property var profileLeft: shaped ? edgeProfile(edgePref.trim(), railHeight, 17) : []
   readonly property var profileRight: shaped ? edgeProfile(edgePref.trim(), railHeight, 41) : []
+  // The bar's lower edge and the bezel's upper one take the same outline, so
+  // the shape runs all the way round the screen.
+  readonly property real spanWidth: Quickshell.screens.length > 0
+    ? Quickshell.screens[0].width - railSize * (dual ? 2 : 1) : 0
+  readonly property var profileTop: shaped ? edgeProfile(edgePref.trim(), spanWidth, 59) : []
+  readonly property var profileBottom: shaped ? edgeProfile(edgePref.trim(), spanWidth, 83) : []
   function setEdge(v) { edgePref = v; run([home + "/.local/bin/tablet-mode", "edge", v]) }
 
   // `tablet-mode sounds on|off`: a soft tap as a button goes down.
@@ -722,8 +728,13 @@ Item {
     border.color: cap ? Qt.alpha("black", 0.6) : (active ? activeColor : Color.popups.border)
     border.width: cap ? 1.5 : 2
     gradient: cap ? capGradient : null
-    scale: cap && area.pressed ? 0.93 : 1.0
-    Behavior on scale { NumberAnimation { duration: 80 } }
+    // A cap is pushed DOWN into its socket, not shrunk: it drops by `travel`,
+    // its shadow closes up under it and its gloss dims, while the socket stays
+    // where it is. `sink` runs 0 (up) to 1 (down); quick down, a touch slower up.
+    readonly property real travel: 3
+    property real sink: cap && area.pressed ? 1 : 0
+    Behavior on sink { NumberAnimation { duration: b.sink > 0.5 ? 110 : 55; easing.type: Easing.OutQuad } }
+    transform: Translate { y: b.sink * b.travel }
 
     Gradient {
       id: capGradient
@@ -737,6 +748,7 @@ Item {
       z: -2
       anchors.centerIn: parent
       width: parent.width + 8; height: parent.height + 8; radius: width / 2
+      transform: Translate { y: -b.sink * b.travel }     // the socket does not move
       gradient: Gradient {
         GradientStop { position: 0.0; color: Qt.alpha("black", 0.62) }
         GradientStop { position: 0.55; color: Qt.alpha("black", 0.30) }
@@ -744,14 +756,16 @@ Item {
       }
     }
     Rectangle {       // the shadow the cap throws on the shell
-      visible: b.cap && !area.pressed
+      visible: b.cap
       z: -1
       width: parent.width; height: parent.height; radius: parent.radius
-      y: 3
+      y: 3 * (1 - b.sink) - b.sink * b.travel * 0.5      // closes up as the cap goes down
       color: Qt.alpha("black", 0.45)
+      opacity: 1 - b.sink * 0.8
     }
     Rectangle {       // the gloss: a soft highlight across the top of the dome
-      visible: b.cap && !area.pressed
+      visible: b.cap
+      opacity: 1 - b.sink * 0.75
       anchors.horizontalCenter: parent.horizontalCenter
       y: parent.height * 0.07
       width: parent.width * 0.62; height: parent.height * 0.34
@@ -848,6 +862,7 @@ Item {
       z: -2
       anchors.centerIn: parent
       width: parent.width + 8; height: parent.height + 8; radius: width / 2
+      transform: Translate { y: -m.sink * 3 }
       gradient: Gradient {
         GradientStop { position: 0.0; color: Qt.alpha("black", 0.62) }
         GradientStop { position: 0.55; color: Qt.alpha("black", 0.30) }
@@ -855,15 +870,20 @@ Item {
       }
     }
     Rectangle {
-      visible: m.cap && !area.pressed
+      visible: m.cap
+      opacity: 1 - m.sink * 0.8
       z: -1
       width: parent.width; height: parent.height; radius: parent.radius
-      y: 3
+      y: 3 * (1 - m.sink) - m.sink * 1.5
       color: Qt.alpha("black", 0.45)
     }
     // A filled button has no colour change left to show a press with.
-    scale: area.pressed ? 0.9 : 1.0
+    // Flat look: it shrinks under the finger. As a cap: it sinks (see TouchButton).
+    scale: !cap && area.pressed ? 0.9 : 1.0
     Behavior on scale { NumberAnimation { duration: 90 } }
+    property real sink: cap && area.pressed ? 1 : 0
+    Behavior on sink { NumberAnimation { duration: m.sink > 0.5 ? 110 : 55; easing.type: Easing.OutQuad } }
+    transform: Translate { y: m.sink * 3 }
 
     SequentialAnimation {
       running: m.busy
@@ -1293,7 +1313,16 @@ Item {
       var framed = frameRail > 0 && R > 1
       var outline = profile && profile.length > 1
       c.beginPath()
-      if (outline) {
+      var across = profileSide === "bottom" || profileSide === "top"     // the shape runs along x
+      if (outline && across) {
+        var hangs = profileSide === "bottom"           // "bottom": the piece hangs down from its top edge
+        if (hangs) { c.moveTo(0, 0); c.lineTo(0, straight) } else { c.moveTo(0, h); c.lineTo(0, h - straight) }
+        for (var ai = 0; ai < profile.length; ai++) {
+          var axv = Math.min(w, ai * 2)
+          c.lineTo(axv, hangs ? straight + profile[ai] : h - straight - profile[ai])
+        }
+        if (hangs) { c.lineTo(w, straight); c.lineTo(w, 0) } else { c.lineTo(w, h - straight); c.lineTo(w, h) }
+      } else if (outline) {
         var onRight = profileSide === "right"
         if (onRight) { c.moveTo(0, 0); c.lineTo(straight, 0) } else { c.moveTo(w, 0); c.lineTo(w - straight, 0) }
         for (var oi = 0; oi < profile.length; oi++) {
@@ -1677,7 +1706,11 @@ Item {
       }
       c.globalAlpha = 1
       c.translate(ox, oy)
-      if (outline && shade) {
+      if (outline && across && shade) {
+        // Hanging from the bar or rising from the bezel: all of it is on the
+        // screen's side of the frame, so it is in the same shadow as their edges.
+        c.fillStyle = "rgba(0,0,0,0.30)"; c.fillRect(0, 0, w, h)
+      } else if (outline && shade) {
         // Across a rail: light on the outside edge, shadow towards the screen.
         var og = profileSide === "right" ? c.createLinearGradient(0, 0, w, 0) : c.createLinearGradient(w, 0, 0, 0)
         og.addColorStop(0, "rgba(255,255,255,0.14)")
@@ -2417,6 +2450,41 @@ Item {
     anchors { top: true; bottom: true; left: true; right: true }
     mask: Region {}
 
+    // The shaped edge of the bar (hanging down) and of the bezel (rising): the
+    // strips themselves are under the windows, so the part that stands out
+    // over the windows has to be drawn here, above them.
+    ShellPattern {
+      visible: root.shaped
+      x: recessCanvas.l; y: recessCanvas.t
+      width: recessCanvas.r - recessCanvas.l; height: root.overhang + 1
+      profile: root.shaped ? root.profileTop : []
+      profileSide: "bottom"
+      base: root.skin ? root.barBase : "transparent"
+      flatWash: true
+      pattern: root.skin ? root.skin.pattern : "none"
+      seed: 47
+      ox: recessCanvas.l; oy: recessCanvas.t
+      ink: root.skin ? root.skin.ink : "transparent"
+      glow: root.skin ? root.skin.glow : "transparent"
+      palette: root.skin && root.skin.palette ? root.skin.palette : []
+    }
+    ShellPattern {
+      visible: root.shaped
+      x: recessCanvas.l; y: recessCanvas.b - root.overhang - 1
+      width: recessCanvas.r - recessCanvas.l; height: root.overhang + 1
+      profile: root.shaped ? root.profileBottom : []
+      profileSide: "top"
+      base: root.skin ? (root.skin.palette && root.skin.pattern.indexOf("wash") >= 0
+                         ? root.skin.palette[root.skin.palette.length - 1] : root.skin.shellBottom) : "transparent"
+      flatWash: true
+      palette: root.skin && root.skin.palette ? [root.skin.palette[root.skin.palette.length - 1]] : []
+      pattern: root.skin ? root.skin.pattern : "none"
+      seed: 61
+      ox: recessCanvas.l; oy: y
+      ink: root.skin ? root.skin.ink : "transparent"
+      glow: root.skin ? root.skin.glow : "transparent"
+    }
+
     Canvas {
       id: recessCanvas
       anchors.fill: parent
@@ -2438,10 +2506,18 @@ Item {
         c.reset()
         if (!visible || width < 8) return
         var pl = root.profileLeft, pr = root.profileRight, shapedNow = root.shaped && pl.length > 1
+        var pt = root.profileTop, pb = root.profileBottom
         function ring(inset, rr) {                 // the recess outline, `inset` px inside it
-          var x0 = l + inset, y0 = t + inset, x1 = r - inset, y1 = b - inset, q = Math.max(0.5, rr - inset), k, yy
+          var x0 = l + inset, y0 = t + inset, x1 = r - inset, y1 = b - inset, q = Math.max(0.5, rr - inset), k, yy, xx
           c.beginPath()
-          c.moveTo(x0 + q, y0); c.lineTo(x1 - q, y0); c.arcTo(x1, y0, x1, y0 + q, q)
+          c.moveTo(x0 + q, y0)
+          if (shapedNow) {                         // along the bar's shaped edge
+            for (k = 0; k < pt.length; k++) {
+              xx = l + k * 2
+              if (xx > x0 + q && xx < x1 - q) c.lineTo(xx, y0 + pt[k])
+            }
+          }
+          c.lineTo(x1 - q, y0); c.arcTo(x1, y0, x1, y0 + q, q)
           if (shapedNow) {                         // down the right rail's shaped side
             for (k = 0; k < pr.length; k++) {
               yy = t + k * 2
@@ -2449,6 +2525,12 @@ Item {
             }
           }
           c.lineTo(x1, y1 - q); c.arcTo(x1, y1, x1 - q, y1, q)
+          if (shapedNow) {                         // back along the bezel's shaped edge
+            for (k = pb.length - 1; k >= 0; k--) {
+              xx = l + k * 2
+              if (xx > x0 + q && xx < x1 - q) c.lineTo(xx, y1 - pb[k])
+            }
+          }
           c.lineTo(x0 + q, y1); c.arcTo(x0, y1, x0, y1 - q, q)
           if (shapedNow) {                         // and back up the left one
             for (k = pl.length - 1; k >= 0; k--) {
@@ -2471,9 +2553,11 @@ Item {
           c.lineWidth = (wall + i * 2.2) * 2
           ring(0, rad); c.stroke()
         }
-        var g = c.createLinearGradient(0, t, 0, t + 26)
-        g.addColorStop(0, "rgba(0,0,0,0.30)"); g.addColorStop(1, "rgba(0,0,0,0)")
-        c.fillStyle = g; c.fillRect(l, t, r - l, 26)
+        if (!shapedNow) {
+          var g = c.createLinearGradient(0, t, 0, t + 26)
+          g.addColorStop(0, "rgba(0,0,0,0.30)"); g.addColorStop(1, "rgba(0,0,0,0)")
+          c.fillStyle = g; c.fillRect(l, t, r - l, 26)
+        }
         c.restore()
         // The lip: light catching the edge where the frame turns down.
         c.strokeStyle = "rgba(255,255,255,0.38)"; c.lineWidth = 1

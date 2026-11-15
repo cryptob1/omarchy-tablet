@@ -6,9 +6,9 @@
     three fingers down           next window on this workspace
     four fingers up              maximise the focused window (the bar stays)
     four fingers down            restore it
-    one finger, in a terminal    drag up / down scrolls (and flings);
-                                 hold, then drag, selects text;
+    one finger, in a terminal    hold, then drag, selects text;
                                  a drag that starts sideways selects at once
+                                 (to scroll, use the scroll strip on the rail)
     two fingers up / down        scroll, in terminals
 
 TERMINALS. Ghostty 1.4 does nothing useful with a finger on its own. With its
@@ -18,9 +18,9 @@ sets and this relies on) a drag does nothing at all. It never
 selects text by touch. So over a terminal this daemon supplies both, as real
 mouse input, which the terminal handles perfectly well:
 
-  scroll   a one-finger drag that starts vertically becomes wheel notches, as
-           far as the finger moved; lifting while moving flings, the next
-           touch stops it.
+  scroll   two fingers, or the rail's scroll strip. (One finger dragging on
+           the terminal can scroll it too, but leaves text selected behind
+           it: see ONE_FINGER_SCROLL. Off unless asked for.)
   select   hold still for LONGPRESS seconds (the Copy / Paste menu appearing
            is the sign), then drag to where the selection should end and
            lift. On lift the same drag is played to the terminal with the
@@ -103,6 +103,13 @@ SCROLL_SETTLE = 0.09     # s two fingers must be down first — a third may stil
 # scroll or select, and how much the vertical part must beat the sideways part
 # to be a scroll.
 ONE_FINGER_SLOP = 0.012
+# Scroll a terminal by dragging one finger on it? Off. It works, but the
+# terminal sees the finger land as a mouse button going down, and with a button
+# held, text scrolling past the pointer is SELECTED: every scroll left a
+# highlight behind and overwrote the selection clipboard. The rail's scroll
+# strip scrolls without touching the terminal at all, and is the way to do it.
+# TABLET_GESTURES_ONE_FINGER_SCROLL=1 turns this back on.
+ONE_FINGER_SCROLL = os.environ.get("TABLET_GESTURES_ONE_FINGER_SCROLL") == "1"
 ONE_FINGER_DOMINANCE = 1.2
 # Fling: speed is measured over the last FLING_WINDOW seconds of the drag, must
 # be at least FLING_MIN notches/s to carry on, decays with time constant
@@ -824,7 +831,7 @@ def run(node):
                             want = "select" if pressed else one_finger_intent(
                                 *to_user((x1 - x0) / xr, (y1 - y0) / yr, transform()))
                             one = "other"
-                            if want == "scroll":
+                            if want == "scroll" and ONE_FINGER_SCROLL:
                                 scroll = Scroll(x0 / xr, y0 / yr, now, [(x0 / xr, y0 / yr)],
                                                 settle=0, shield=False)
                                 if scroll.allowed:

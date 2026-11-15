@@ -98,11 +98,11 @@ By default the rails are drawn like every other Omarchy surface: your theme's co
 
 Choose one in the settings panel (the cog at the top of the left rail), or with `tablet-mode look <name>`.
 
-**Made to look like a thing you are holding.** In a controller look the screen is set down into the frame: a lit lip where the frame ends, the dark wall of the recess, and the shadow the frame throws across the edge of the screen. Every button sits in a socket cut into the shell, with its legend engraved. The frame's outer edges are chamfered, light falls across it from above, and polished materials throw it back in broad bands.
+**Made to look like a thing you are holding.** In a controller look the screen is set down into the frame: a lit lip where the frame ends, the dark wall of the recess, and the shadow the frame throws across the edge of the screen. Every button sits in a socket cut into the shell, with its legend engraved, and sinks into it when pressed: the cap drops, its shadow closes up under it, and it comes back up as you let go. The frame's outer edges are chamfered, light falls across it from above, and polished materials throw it back in broad bands.
 
 **The bar joins in.** With a controller look on, Omarchy's top bar is drawn in the same shell, pattern and all, and meets the rails in rounded inside corners; a thin bezel in the same shell closes the frame along the bottom (it takes 8 px of height), so the screen sits inside one object. The bar's writing keeps your theme's colour and sits on a status glass, a dark window let into the shell, so it reads the same on a pale shell as on a dark one (and Omarchy's own panels, which share that colour, are left alone). With the plain look, with the keyboard attached, or with the bar somewhere other than the top, the bar is left exactly as your theme has it.
 
-**Edges.** With a controller look, the side of each rail that faces the screen need not be straight: `tablet-mode edge lightning`, `wave`, `scallop`, `flame` or `saw` (or the Edge row in the settings panel) gives it that outline, and the recess, its lip and its shadow follow it. A shaped edge stands up to 15 px over the edge of your windows; it is only drawn there, and a touch on it still goes to the window underneath. `straight` is the default.
+**Edges.** With a controller look, the side of each rail that faces the screen need not be straight: `tablet-mode edge lightning`, `wave`, `scallop`, `flame` or `saw` (or the Edge row in the settings panel) gives it that outline, the bar and the bottom bezel take it too, so it runs all the way round the screen, and the recess, its lip and its shadow follow it. A shaped edge stands up to 15 px over the edge of your windows; it is only drawn there, and a touch on it still goes to the window underneath. `straight` is the default.
 
 **Slide away.** `tablet-mode hide 30` (or "Slide away when idle" in the settings panel) slides the rails and the bottom bezel off their edges after that many seconds without a touch, and gives the windows the space; the next touch anywhere brings them back. Not while you are dictating or in the settings. `tablet-mode hide 0`, the default, keeps them in place.
 
@@ -124,10 +124,12 @@ Ghostty does little useful with a finger. With its scrollbar on, a touch drag sc
 
 | Gesture over a terminal | Does |
 |---|---|
-| Drag up / down | Scrolls at about finger speed. Lift while moving and it flings; touch to stop. |
+| The rail's scroll strip | Scrolls, like a wheel, with a fling. The way to scroll a terminal. |
 | Hold, then drag, then lift | Selects from where you held to where you lifted. The Copy / Paste menu appears beside it. |
 | Drag that starts sideways | Selects, without the hold. |
 | Two fingers up / down | Scrolls. |
+
+A one-finger drag on the terminal can scroll it too (`TABLET_GESTURES_ONE_FINGER_SCROLL=1` for the gesture service), but it is off: the terminal treats the resting finger as a held mouse button, so text scrolling under it gets selected.
 
 The selection is highlighted when you lift, not while you drag. GTK gives a widget's click gesture to one input at a time, so the terminal ignores mouse input for as long as a finger rests on it; the drag is played to it once the finger is up.
 
