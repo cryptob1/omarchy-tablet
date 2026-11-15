@@ -89,7 +89,7 @@ By default the rails are drawn like every other Omarchy surface: your theme's co
 
 Choose one in the settings panel (the cog at the top of the left rail), or with `tablet-mode look <name>`.
 
-**The bar joins in.** With a controller look on, Omarchy's top bar is drawn in the same shell, pattern and all, and meets the rails in rounded inside corners, so the screen sits in one frame. The bar's writing switches to dark or light to suit. With the plain look, with the keyboard attached, or with the bar somewhere other than the top, the bar is left exactly as your theme has it.
+**The bar joins in.** With a controller look on, Omarchy's top bar is drawn in the same shell, pattern and all, and meets the rails in rounded inside corners; a thin bezel in the same shell closes the frame along the bottom (it takes 8 px of height), so the screen sits inside one object. The bar's writing switches to dark or light to suit. With the plain look, with the keyboard attached, or with the bar somewhere other than the top, the bar is left exactly as your theme has it.
 
 **Button sounds.** `tablet-mode sounds on` (or the settings panel) plays a soft tap as a button goes down. Off by default. The mic never makes one: it would be the first thing your dictation hears.
 

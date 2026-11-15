@@ -223,6 +223,11 @@ Item {
     : ((barBase.r * 0.299 + barBase.g * 0.587 + barBase.b * 0.114) > 0.58 ? "#1b1c22" : "#ffffff")
   // The frame: how far its inside corners sweep, and its edge line.
   readonly property int frameRadius: 14
+  // The frame is CLOSED along the bottom by a thin bezel in the same shell: a
+  // U of thick sides and a thin top reads as three strips, a closed ring reads
+  // as one object with the screen set into it. It costs the windows this much
+  // height.
+  readonly property int bezel: 8
   // A rim skin keeps its coloured edge. Otherwise the edge is a thin dark seam:
   // the frame is shaded to fall away into the screen, and a pale line there (as
   // it was) made a second border round the windows' own.
@@ -1021,6 +1026,7 @@ Item {
     property bool flatWash: false
     property real frameRail: 0
     property real frameBar: 0
+    property bool frameFlip: false         // the bottom strip: the same outline, upside down
     property color edge: "transparent"     // a line along the frame's inside edge
     property bool shade: true
     property real soft: 0.72               // how strongly decoration is drawn
@@ -1048,7 +1054,13 @@ Item {
       function mod(a, n) { return ((a % n) + n) % n }
       var R = h - frameBar                 // the inside corners' radius (frame only)
       c.beginPath()
-      if (frameRail > 0) {
+      if (frameRail > 0 && frameFlip) {
+        c.moveTo(0, h); c.lineTo(w, h); c.lineTo(w, 0); c.lineTo(w - frameRail, 0)
+        c.arc(w - frameRail - R, 0, R, 0, Math.PI / 2, false)
+        c.lineTo(frameRail + R, R)
+        c.arc(frameRail + R, 0, R, Math.PI / 2, Math.PI, false)
+        c.lineTo(0, 0)
+      } else if (frameRail > 0) {
         c.moveTo(0, 0); c.lineTo(w, 0); c.lineTo(w, h); c.lineTo(w - frameRail, h)
         c.arc(w - frameRail - R, h, R, 0, -Math.PI / 2, true)
         c.lineTo(frameRail + R, frameBar)
@@ -1255,22 +1267,30 @@ Item {
         // Light from above: a sheen along the top edge, falling to shadow
         // where the frame meets the screen. The rails are shaded the same way
         // across their width, so the whole frame reads as one raised moulding.
-        var sg = c.createLinearGradient(0, 0, 0, frameBar)
+        // (flipped: the outside edge, and so the sheen, is at the bottom)
+        var sg = frameFlip ? c.createLinearGradient(0, h, 0, R) : c.createLinearGradient(0, 0, 0, frameBar)
         sg.addColorStop(0, "rgba(255,255,255,0.16)")
         sg.addColorStop(0.45, "rgba(255,255,255,0)")
         sg.addColorStop(1, "rgba(0,0,0,0.30)")
-        c.fillStyle = sg; c.fillRect(0, 0, w, frameBar)
-        c.fillStyle = "rgba(0,0,0,0.30)"; c.fillRect(0, frameBar, w, h - frameBar)
+        c.fillStyle = sg; c.fillRect(0, frameFlip ? R : 0, w, frameBar)
+        c.fillStyle = "rgba(0,0,0,0.30)"; c.fillRect(0, frameFlip ? 0 : frameBar, w, R)
       }
       c.restore()
       if (frameRail > 0 && edge.a > 0) {       // the frame's inside edge, round the corners
         c.strokeStyle = edge; c.lineWidth = edgeWidth
         var e = edgeWidth / 2
         c.beginPath()
-        c.moveTo(w - frameRail - e, h)
-        c.arc(w - frameRail - R, h, R - e, 0, -Math.PI / 2, true)
-        c.lineTo(frameRail + R, frameBar + e)
-        c.arc(frameRail + R, h, R - e, -Math.PI / 2, Math.PI, true)
+        if (frameFlip) {
+          c.moveTo(w - frameRail - e, 0)
+          c.arc(w - frameRail - R, 0, R - e, 0, Math.PI / 2, false)
+          c.lineTo(frameRail + R, R - e)
+          c.arc(frameRail + R, 0, R - e, Math.PI / 2, Math.PI, false)
+        } else {
+          c.moveTo(w - frameRail - e, h)
+          c.arc(w - frameRail - R, h, R - e, 0, -Math.PI / 2, true)
+          c.lineTo(frameRail + R, frameBar + e)
+          c.arc(frameRail + R, h, R - e, -Math.PI / 2, Math.PI, true)
+        }
         c.stroke()
       }
     }
@@ -1326,7 +1346,7 @@ Item {
       // Joined to the bar strip above: no corner there, the strip supplies it.
       topLeftRadius: root.controller ? (root.barSkinned && !rail.upright ? 0 : root.shellRadius) : radius
       topRightRadius: root.controller ? (rail.upright ? root.shellRadius : 0) : radius
-      bottomLeftRadius: root.controller ? (rail.upright ? 0 : root.shellRadius) : radius
+      bottomLeftRadius: root.controller ? (rail.upright || root.barSkinned ? 0 : root.shellRadius) : radius
       bottomRightRadius: root.controller ? 0 : radius
       color: Qt.alpha(Color.popups.background, Color.popups.background.a * root.railOpacity)
       // Controller look: a moulded shell, lighter than the caps set into it.
@@ -1368,13 +1388,13 @@ Item {
         visible: root.skin !== null
         chars: root.skin && root.skin.chars ? root.skin.chars : []
         seed: 5
-        keepClear: root.shellRadius
+        keepClear: root.barSkinned ? 0 : root.shellRadius
       }
 
       Rectangle {       // the frame's inside edge, down the rail (joined to the bar only)
         visible: root.barSkinned && !rail.upright
         x: 0; y: root.frameRadius
-        width: root.frameEdgeWidth; height: parent.height - root.frameRadius - root.shellRadius
+        width: root.frameEdgeWidth; height: parent.height - root.frameRadius * 2 - root.bezel
         color: root.frameEdge
       }
 
@@ -1547,7 +1567,7 @@ Item {
       anchors.bottomMargin: root.edgeGap
       radius: Style.cornerRadius
       topRightRadius: root.controller ? (root.barSkinned ? 0 : root.shellRadius) : radius
-      bottomRightRadius: root.controller ? root.shellRadius : radius
+      bottomRightRadius: root.controller ? (root.barSkinned ? 0 : root.shellRadius) : radius
       topLeftRadius: root.controller ? 0 : radius
       bottomLeftRadius: root.controller ? 0 : radius
       color: Qt.alpha(Color.popups.background, Color.popups.background.a * root.railOpacity)
@@ -1590,13 +1610,13 @@ Item {
         visible: root.skin !== null
         chars: root.skin && root.skin.chars ? root.skin.chars : []
         seed: 9
-        keepClear: root.shellRadius
+        keepClear: root.barSkinned ? 0 : root.shellRadius
       }
 
       Rectangle {
         visible: root.barSkinned
         x: parent.width - width; y: root.frameRadius
-        width: root.frameEdgeWidth; height: parent.height - root.frameRadius - root.shellRadius
+        width: root.frameEdgeWidth; height: parent.height - root.frameRadius * 2 - root.bezel
         color: root.frameEdge
       }
 
@@ -1774,6 +1794,43 @@ Item {
       chars: root.skin && root.skin.chars ? root.skin.chars : []
       seed: 13
       opacity: 0.55                      // behind the bar's own writing
+    }
+  }
+
+  PanelWindow {
+    id: bezelStrip
+    visible: root.barSkinned
+    screen: Quickshell.screens.length > 0 ? Quickshell.screens[0] : null
+    color: "transparent"
+    WlrLayershell.namespace: "omarchy-tablet-bar"
+    WlrLayershell.layer: WlrLayer.Bottom
+    WlrLayershell.keyboardFocus: WlrKeyboardFocus.None
+    // Reserves only the bezel; its corner pieces rise into the windows' corners.
+    exclusiveZone: root.bezel
+    anchors { bottom: true; left: true; right: true }
+    implicitHeight: root.bezel + root.frameRadius
+    mask: Region {}
+
+    ShellPattern {
+      id: bezelPattern
+      anchors.fill: parent
+      visible: root.skin !== null
+      base: root.skin ? (root.skin.palette && root.skin.pattern.indexOf("wash") >= 0
+                         ? root.skin.palette[root.skin.palette.length - 1] : root.skin.shellBottom) : "transparent"
+      // "wash" here is the LAST colour: the one the rails end with.
+      flatWash: true
+      palette: root.skin && root.skin.palette ? [root.skin.palette[root.skin.palette.length - 1]] : []
+      frameRail: root.dual ? root.railSize : 0.01
+      frameBar: root.bezel
+      frameFlip: true
+      ox: 0
+      oy: bezelStrip.screen ? bezelStrip.screen.height - height : 0
+      edge: root.frameEdge
+      edgeWidth: root.frameEdgeWidth
+      pattern: root.skin ? root.skin.pattern : "none"
+      seed: 61
+      ink: root.skin ? root.skin.ink : "transparent"
+      glow: root.skin ? root.skin.glow : "transparent"
     }
   }
 
