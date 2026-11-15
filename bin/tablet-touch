@@ -28,7 +28,11 @@
 
     tablet-touch scroll-aim
         The rail's scroll strip is about to send wheel events: put the pointer
-        over the focused window so they reach it.
+        where they should go. That is the focused window, unless one of
+        Omarchy's own pickers is open over it (the app launcher, the menu, the
+        clipboard, emoji or image pickers): then it is the picker. This is the
+        ONLY way to scroll the app launcher by touch — there, a finger dragged
+        on the grid picks an app up to move it, by Omarchy's design.
 
     tablet-touch next-window
         The rail's switch button: focus the next window on this workspace. If
@@ -113,6 +117,32 @@ def focused_is_terminal():
     except (ValueError, OSError, subprocess.SubprocessError):
         return False
     return str(cls).lower() in TERMINALS
+
+
+# Omarchy's pickers: full-screen layers with their card in the middle.
+PICKERS = ("omarchy-dock-apps", "omarchy-menu", "omarchy-clipboard", "omarchy-emojis", "omarchy-image-selector")
+
+
+def open_picker():
+    """Layout (x, y) of the middle of an open Omarchy picker, or None."""
+    try:
+        layers = json.loads(hyprctl("layers", "-j") or "{}")
+    except (ValueError, OSError, subprocess.SubprocessError):
+        return None
+    for mon in layers.values():
+        for level in ("3", "2"):                      # overlay, then top
+            for layer in (mon.get("levels") or {}).get(level, []):
+                if layer.get("namespace") in PICKERS:
+                    return layer["x"] + layer["w"] // 2, layer["y"] + layer["h"] // 2
+    return None
+
+
+def scroll_aim():
+    spot = open_picker()
+    if spot:
+        hyprctl("dispatch", f"hl.dsp.cursor.move({{ x = {spot[0]}, y = {spot[1]} }})")
+    else:
+        park_pointer(active())
 
 
 def cortex_idle():
@@ -352,9 +382,9 @@ def main():
     elif cmd in ("paste-here", "copy-here"):
         menu(cmd.split("-")[0], focused_is_terminal(), "")
     elif cmd == "scroll-aim":
-        # The rail's scroll strip: wheel events go to the window under the
+        # The rail's scroll strip: wheel events go to whatever is under the
         # pointer, and a touch on the rail does not move it.
-        park_pointer(active())
+        scroll_aim()
     elif cmd in ("copy", "paste", "all"):
         address = args[args.index("--address") + 1] if "--address" in args[:-1] else ""
         menu(cmd, "--terminal" in args, address)

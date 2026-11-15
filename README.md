@@ -61,7 +61,7 @@ Every button's touch target is bigger than the button you see: it reaches out to
 |---|---|
 | Close | Closes the focused window. Asks first: one tap arms it ("Close?"), a second tap within 3 s closes. |
 | Maximise | Fills the screen with the focused window, or restores it. The bar and rails stay. |
-| Scroll strip | Drag along it to scroll the focused window, like a mouse wheel: down moves further down the page. Let go while moving and it keeps going. |
+| Scroll strip | Drag along it to scroll the focused window, like a mouse wheel: down moves further down the page. Let go while moving and it keeps going. With the app launcher (or another Omarchy picker) open, it scrolls that instead: the only way to scroll the launcher by touch, since a finger dragged on its grid picks an app up. |
 | Switch | Focuses the next window on the workspace. If the current one fills the screen, the next takes its place. |
 | Keyboard | Shows or hides the on-screen keyboard. |
 | n › | The current workspace number, and next workspace. Hold the arrow to take the focused window along. |
