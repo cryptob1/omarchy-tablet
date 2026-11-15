@@ -822,6 +822,18 @@ Item {
     }
   }
 
+  // The tablet's own power button (bin/tablet-power) opens the same sheet.
+  FileView {
+    path: Quickshell.env("XDG_RUNTIME_DIR") + "/tablet-mode/power"
+    watchChanges: true
+    printErrors: false
+    onFileChanged: reload()
+    onLoaded: {
+      var at = Number(String(text()).trim()) || 0
+      if (Math.abs(Date.now() / 1000 - at) < 3) root.powerOpen = !root.powerOpen     // a stale file opens nothing
+    }
+  }
+
   // POWER. The button at the top of the left rail opens a small sheet: lock,
   // sleep, restart, shut down. Restart and shut down ask first (a second tap
   // on the same button), like close does; they go through `omarchy-system`,

@@ -35,11 +35,11 @@ hl.layer_rule({ name = "tablet-rail-on-top", match = { namespace = "^omarchy-tab
 -- (Appearance > Glassy), with the same rule Omarchy gives its bar and menus.
 hl.layer_rule({ name = "tablet-rail-blur", match = { namespace = "^omarchy-tablet-rail$" }, blur = true, ignore_alpha = 0.3 })
 
--- Power button. Omarchy opens the System menu on press. Without a keyboard a
--- short press should do what it does on every tablet — lock and blank the
--- screen — and a long press should still reach the menu (to shut down).
--- bin/tablet-power decides which; with a keyboard attached it is the menu,
--- as before.
+-- Power button. Omarchy opens the System menu on press, which wants a
+-- keyboard. Without one a short press opens the rail plugin's power sheet
+-- (Lock, Sleep, Restart, Shut down, sized for a finger) and a long press
+-- locks at once. bin/tablet-power decides which; with a keyboard attached it
+-- is the System menu, as before.
 hl.unbind("XF86PowerOff")
-o.bind_hold("XF86PowerOff", "Power button: tap locks (tablet), hold opens the System menu",
+o.bind_hold("XF86PowerOff", "Power button: tap opens the power sheet (tablet), hold locks",
   bin .. "tablet-power press", nil, bin .. "tablet-power release", { locked = true })

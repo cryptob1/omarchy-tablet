@@ -2,12 +2,14 @@
 # tablet-power — what the power button does (bound in hypr/fragments/tablet.lua).
 #
 #   keyboard attached            System menu, as Omarchy does by default
-#   tablet, short press          lock (the lock screen blanks the display)
-#   tablet, held HOLD seconds    System menu (shut down, restart, ...)
+#   tablet, short press          the power sheet: Lock, Sleep, Restart, Shut down
+#                                (the rail plugin's, big enough for a finger;
+#                                press again to dismiss it)
+#   tablet, held HOLD seconds    lock at once (the lock screen blanks the display)
 #
 # `press` leaves a marker and arms a timer; `release` before the timer fires
-# takes the marker and locks. Whoever takes the marker acts, so the two can
-# never both run.
+# takes the marker and opens the sheet. Whoever takes the marker acts, so the
+# two can never both run.
 #
 # Usage: tablet-power press|release
 set -uo pipefail
@@ -16,6 +18,10 @@ state="${XDG_STATE_HOME:-$HOME/.local/state}/tablet-mode/state"
 dir="${XDG_RUNTIME_DIR:-/tmp}/tablet-mode"
 marker="$dir/power-press"
 menu() { omarchy-menu toggle system >/dev/null 2>&1; }
+locked() { [ "$(omarchy-shell lock isLocked 2>/dev/null)" = "true" ]; }
+lock() { locked || omarchy system lock >/dev/null 2>&1; }
+# The rail plugin watches this file and toggles its power sheet.
+sheet() { mkdir -p "$dir"; date +%s.%N > "$dir/power"; }
 take() { rm "$marker" 2>/dev/null; }      # true for exactly one caller
 
 case "${1:-}" in
@@ -29,14 +35,14 @@ case "${1:-}" in
     echo "$id" > "$marker"
     (
       sleep "$HOLD"
-      [ "$(cat "$marker" 2>/dev/null)" = "$id" ] && take && menu
+      [ "$(cat "$marker" 2>/dev/null)" = "$id" ] && take && lock
     ) >/dev/null 2>&1 &
     ;;
   release)
-    # Already locked: do nothing (a touch or this press has woken the screen;
-    # asking the lock service again tells it a suspend is coming).
-    if take && [ "$(omarchy-shell lock isLocked 2>/dev/null)" != "true" ]; then
-      omarchy system lock >/dev/null 2>&1
+    # Locked: do nothing (this press has woken the screen, and the sheet
+    # cannot be shown over the lock screen).
+    if take && ! locked; then
+      sheet
     fi
     ;;
   *) echo "usage: tablet-power press|release" >&2; exit 2 ;;

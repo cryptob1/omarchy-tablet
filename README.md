@@ -198,7 +198,7 @@ The screen turns only when you say so. The Rotate button swaps landscape and por
 ### Also
 
 - **On-screen keyboard** ([wvkbd](https://github.com/jjsullivan5196/wvkbd)) that appears over the lock screen when there is no keyboard to unlock with, and sits above Omarchy's panels, so typing a Wi-Fi password does not close the Wi-Fi panel.
-- **Power button**: a tap locks, a hold opens the System menu (in tablet mode; with a keyboard attached it opens the menu as usual).
+- **Power button**: a tap opens the power sheet (Lock, Sleep, Restart, Shut down; tap again to dismiss), a hold locks at once (in tablet mode; with a keyboard attached it opens Omarchy's System menu as usual).
 - **Screen timeout**: the display switches off after ten minutes without input. Omarchy's idle service locks but never blanks, which burns an OLED. Films and Stay awake are respected.
 
 ## Install
