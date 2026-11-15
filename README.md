@@ -58,7 +58,7 @@ A rail on each edge of the screen, shown while the machine is in tablet mode. Wi
 
 ### Looks
 
-<img src="docs/looks.png" alt="The ten controller looks" width="520">
+<img src="docs/looks.png" alt="Controller, Cheetah, Tiger, Arcade, Neon, Retro, Candy, Lava, Galaxy, Ice" width="430"> <img src="docs/looks2.png" alt="Rainbow, Unicorn, Fairy, Mermaid, Dragon, Sunset, Watermelon, Honeybee, Circuit, Pixel" width="430">
 
 By default the rails are drawn like every other Omarchy surface: your theme's colours, corner radius, border and gaps. Or pick a controller look, where the rails become a moulded shell flush with the screen edges, the buttons raised caps that sink when pressed, and the scroll strip a ridged thumb wheel:
 
@@ -75,6 +75,16 @@ By default the rails are drawn like every other Omarchy surface: your theme's co
 | `lava` | Black and red with glowing embers. |
 | `galaxy` | Deep blue to violet, with stars. |
 | `ice` | Pale blue and white. |
+| `rainbow` | Diagonal rainbow stripes, white caps. |
+| `unicorn` | A pastel rainbow wash with gold and white sparkles. |
+| `fairy` | Twilight purple into teal, thick with fairy dust. |
+| `mermaid` | Teal to violet, in scales. |
+| `dragon` | Dark green scales edged in gold, red buttons. |
+| `sunset` | Yellow through pink to deep purple. |
+| `watermelon` | Pink with seeds and a green rind. |
+| `honeybee` | Honeycomb yellow with black caps. |
+| `circuit` | A green circuit board with gold solder pads. |
+| `pixel` | Blocky 8-bit blues. |
 
 Choose one in the settings panel (the cog at the top of the left rail), or with `tablet-mode look <name>`.
 
