@@ -691,8 +691,48 @@ class Select:
 
     def __init__(self):
         self.active = False
+        self.live = False      # the button is down now and the pointer follows the finger
+        self.moved = 0.0
         self.mon = {}
         self.origin = None
+
+    def press(self, px, py, word=False):
+        """Start a LIVE selection at normalised panel (px, py): the button goes
+        down now and follow() drags it under the finger, as on a phone. Only
+        for a touch on the cover (see Cover): the terminal has not seen the
+        finger, so it takes the pointer's press at once.
+
+        `word`: a long press. Click first, so the press is the second of a
+        double click: the terminal selects the word there, and a drag from it
+        extends word by word. False if no terminal is there."""
+        mon = monitor()
+        if DRY or terminal_at(px, py, mon) is None:
+            return False
+        COVER.lower()
+        try:
+            COVER.wait()
+            self.mon, self.origin = mon, (px, py)
+            self._move(px, py)
+            time.sleep(0.03)
+            if word:
+                self._button("0xC0")
+                time.sleep(0.04)
+            self._button("0x40")
+        except (OSError, subprocess.SubprocessError):
+            COVER.lift()
+            return False
+        self.active = self.live = True
+        self.moved = time.time()
+        return True
+
+    def follow(self, px, py):
+        if not self.live or time.time() - self.moved < 0.02:
+            return
+        self.moved = time.time()
+        try:
+            self._move(px, py)
+        except (OSError, subprocess.SubprocessError):
+            pass
 
     def _move(self, px, py):
         x, y = to_layout(px, py, self.mon)
@@ -719,6 +759,17 @@ class Select:
         if not self.active:
             return
         self.active = False
+        if self.live:                       # let go where the finger lifted
+            self.live = False
+            try:
+                if px is not None:
+                    self._move(px, py)
+                    time.sleep(0.02)
+                self._button("0x80")
+            except (OSError, subprocess.SubprocessError):
+                pass
+            COVER.lift()
+            return
         if px is None:
             return
         if DRY:
@@ -948,6 +999,10 @@ def run(node):
                 if left <= 0:
                     (x0, y0, x1, y1), = start.values() if len(start) == 1 else ((0, 0, xr, yr),)
                     if is_long_press(time.time() - began, (x1 - x0) / xr, (y1 - y0) / yr, pressed):
+                        # On a terminal, as on a phone: the word under the
+                        # finger is selected, and dragging on extends it.
+                        if covered and one is None and SELECT.press(x1 / xr, y1 / yr, word=True):
+                            one = "select"
                         MENU.show(x1 / xr, y1 / yr)
                     pressed = True
                     continue
@@ -1020,13 +1075,21 @@ def run(node):
                                     one = "scroll"
                                 else:
                                     scroll = None
-                            elif want == "select" and SELECT.begin(x0 / xr, y0 / yr):
+                            elif want == "select" and (SELECT.press(x0 / xr, y0 / yr) if covered
+                                                       else SELECT.begin(x0 / xr, y0 / yr)):
                                 one = "select"
                             if pressed:                    # the menu steps aside for the drag
                                 selecting = True
                                 MENU.hide()
                         if one == "scroll":
                             scroll.update(x1 / xr, y1 / yr, now)
+                        elif one == "select" and SELECT.live:
+                            if pressed and not selecting and (abs(x1 - x0) / xr > ONE_FINGER_SLOP
+                                                              or abs(y1 - y0) / yr > ONE_FINGER_SLOP):
+                                selecting = True           # the menu steps aside for the drag
+                                MENU.hide()
+                            if not pressed or selecting:
+                                SELECT.follow(x1 / xr, y1 / yr)
                     elif SELECT.active and len(pos) > 1:   # a second finger landed: abandon it
                         SELECT.end()
                     # Two fingers, and never more in this sequence: a scroll.

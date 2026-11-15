@@ -176,12 +176,12 @@ So terminals never get the finger. The shell plugin keeps a see-through surface 
 |---|---|
 | Tap | A click exactly there: tabs, panes and buttons in a terminal program work. |
 | Drag up / down, one finger or two | Scrolls, with a fling. Nothing is selected. |
-| Drag that starts sideways | Selects from where it started to where it lifted. The Copy / Paste menu appears beside it. |
-| Hold, then drag, then lift | Selects, whichever way you drag. |
-| Hold still | The Copy / Paste / Select all menu. |
+| Hold on a word | Selects that word, as on a phone, and shows Copy / Paste / Select all. |
+| Hold, then drag | Extends the selection word by word under the finger. Lift, and the menu is there to copy it. |
+| Drag that starts sideways | Selects letter by letter under the finger, without the hold. |
 | The rail's scroll strip | Scrolls the focused terminal without touching it. |
 
-The selection appears when the finger lifts, not under it as it moves. A terminal with another window floating over it, or a fullscreen one, is left uncovered and behaves as Ghostty does by itself. `TABLET_GESTURES_COVER=0` in the gesture service's environment turns the cover off.
+A terminal with another window floating over it, or a fullscreen one, is left uncovered and behaves as Ghostty does by itself. `TABLET_GESTURES_COVER=0` in the gesture service's environment turns the cover off.
 
 ### Rotation
 
