@@ -295,6 +295,30 @@ Item {
     if (!(barSkinned && !upright && slide === 1) || want === "off") return false
     return want === "always" || keyContext !== ""
   }
+  // THE TOP BAR, TUCKED AWAY. With the desktops, the battery and the time in
+  // the bottom band, Omarchy's bar has little left to say on a tablet, and
+  // what it does have (Wi-Fi, Bluetooth, sound, the tray) is wanted now and
+  // then. So while the band is up the bar is hidden (Omarchy's own bar-off
+  // toggle) and the top of the frame is a thin bezel; the clock key in the
+  // band brings the bar back for half a minute, or until tapped again.
+  // `tablet-mode topbar hide|show`: this, or the bar always there.
+  property string topbarPref: "hide"
+  property bool barPeek: false
+  readonly property bool barTucked: pagerOn && topbarPref.trim() !== "show" && !barPeek
+  readonly property int topSize: barTucked ? 12 : Style.bar.sizeHorizontal
+  onBarTuckedChanged: tuckBar()
+  function tuckBar() { Quickshell.execDetached(["omarchy-toggle-bar", barTucked ? "on" : "off"]) }
+  function setTopbar(v) { topbarPref = v; barPeek = false; run([home + "/.local/bin/tablet-mode", "topbar", v]) }
+  Timer { interval: 30000; running: root.barPeek; onTriggered: root.barPeek = false }
+  FileView {
+    path: root.stateDir + "/topbar"
+    watchChanges: true
+    printErrors: false
+    onFileChanged: reload()
+    onLoaded: root.topbarPref = text()
+    onLoadFailed: root.topbarPref = "hide"
+  }
+
   // THE PAGER. The desktops, as numbered keys at the left end of the bottom
   // band: tap one to go there, hold one to take the focused window there. The
   // one you are on is lit, empty ones are faint. While the band is up the
@@ -321,7 +345,7 @@ Item {
       { l: "Forward", k: [56, 106] }, { l: "Reload", k: [29, 19] },
       { l: "Prev tab", k: [29, 42, 15] }, { l: "Next tab", k: [29, 15] }, { l: "New tab", k: [29, 20] },
       { l: "Close tab", k: [29, 17] }, { l: "Reopen", k: [29, 42, 20] },
-      { l: "Address", k: [29, 38] }, { l: "Find", k: [29, 33] }, { l: "A\u2212", k: [29, 12] }, { l: "A+", k: [29, 13] }
+      { l: "Address", k: [29, 38] }, { l: "Find", k: [29, 33] }
     ]
   })
   readonly property var keySet: keySets[keyContext] || keySets.terminal
@@ -438,7 +462,7 @@ Item {
   property bool todayOpen: false
   property var now: new Date()
   property int monthShift: 0                       // months from this one, in the grid
-  Timer { interval: 20000; repeat: true; running: root.todayOpen; triggeredOnStart: true; onTriggered: root.now = new Date() }
+  Timer { interval: 20000; repeat: true; running: root.todayOpen || root.pagerOn; triggeredOnStart: true; onTriggered: root.now = new Date() }
   onTodayOpenChanged: monthShift = 0
   // A rim skin keeps its coloured edge. Otherwise the edge is a thin dark seam:
   // the frame is shaded to fall away into the screen, and a pale line there (as
@@ -551,7 +575,7 @@ Item {
     return out
   }
   readonly property real railHeight: Quickshell.screens.length > 0
-    ? Quickshell.screens[0].height - Style.bar.sizeHorizontal - bezel : 0
+    ? Quickshell.screens[0].height - root.topSize - bezel : 0
   readonly property var profileLeft: shaped ? edgeProfile(edgeShape, railHeight, 17) : []
   readonly property var profileRight: shaped ? edgeProfile(edgeShape, railHeight, 41) : []
   // The bar's lower edge and the bezel's upper one take the same outline, so
@@ -592,6 +616,7 @@ Item {
   // loaded at run time and pw-play stands in where it is missing.
   Component.onCompleted: {
     applyBar()
+    tuckBar()
     try {
       tapSound = Qt.createQmlObject('import QtMultimedia; SoundEffect { volume: 0.35 }', root, "tapSound")
       tapSound.source = "file://" + tapFile
@@ -2223,7 +2248,7 @@ Item {
       pattern: root.skin ? root.skin.pattern : "none"
       seed: 11
       ox: rail.screen ? rail.screen.width - width : 0
-      oy: Style.bar.sizeHorizontal
+      oy: root.topSize
       ink: root.skin ? root.skin.ink : "transparent"
       glow: root.skin ? root.skin.glow : "transparent"
       palette: root.skin && root.skin.palette ? root.skin.palette : []
@@ -2258,7 +2283,7 @@ Item {
         pattern: root.skin ? root.skin.pattern : "none"
         seed: 11
         ox: rail.screen ? rail.screen.width - root.railSize : 0
-        oy: Style.bar.sizeHorizontal
+        oy: root.topSize
         rTL: parent.topLeftRadius; rTR: parent.topRightRadius
         rBR: parent.bottomRightRadius; rBL: parent.bottomLeftRadius
         ink: root.skin ? root.skin.ink : "transparent"
@@ -2554,7 +2579,7 @@ Item {
       pattern: root.skin ? root.skin.pattern : "none"
       seed: 29
       ox: 0
-      oy: Style.bar.sizeHorizontal
+      oy: root.topSize
       ink: root.skin ? root.skin.ink : "transparent"
       glow: root.skin ? root.skin.glow : "transparent"
       palette: root.skin && root.skin.palette ? root.skin.palette : []
@@ -2587,7 +2612,7 @@ Item {
         pattern: root.skin ? root.skin.pattern : "none"
         seed: 29
         ox: 0
-        oy: Style.bar.sizeHorizontal
+        oy: root.topSize
         rTL: parent.topLeftRadius; rTR: parent.topRightRadius
         rBR: parent.bottomRightRadius; rBL: parent.bottomLeftRadius
         ink: root.skin ? root.skin.ink : "transparent"
@@ -2853,9 +2878,11 @@ Item {
     // into the gap at the windows' own rounded corners, and nowhere else.
     WlrLayershell.layer: WlrLayer.Bottom
     WlrLayershell.keyboardFocus: WlrKeyboardFocus.None
-    exclusionMode: ExclusionMode.Ignore
+    // Omarchy's bar reserves this space itself; with it tucked away, we do.
+    exclusionMode: root.barTucked ? ExclusionMode.Normal : ExclusionMode.Ignore
+    exclusiveZone: root.barTucked ? root.topSize : 0
     anchors { top: true; left: true; right: true }
-    implicitHeight: Style.bar.sizeHorizontal + (root.framed ? root.frameRadius : 0)
+    implicitHeight: root.topSize + (root.framed ? root.frameRadius : 0)
     mask: Region {}                      // never takes a touch
 
     ShellPattern {
@@ -2864,7 +2891,7 @@ Item {
       base: root.skin ? root.barBase : "transparent"
       flatWash: true
       frameRail: root.framed ? (root.dual ? root.railSize : 0.01) : 0
-      frameBar: Style.bar.sizeHorizontal
+      frameBar: root.topSize
       edge: root.frameEdge
       edgeWidth: root.frameEdgeWidth
       pattern: root.skin ? root.skin.pattern : "none"
@@ -2877,9 +2904,9 @@ Item {
     // along its top, lit along its bottom lip), in the skin's own dark
     // colour (root.glassColor).
     Rectangle {
-      visible: root.skin !== null
+      visible: root.skin !== null && !root.barTucked
       x: 5; y: 2
-      width: parent.width - 10; height: Style.bar.sizeHorizontal - 4
+      width: parent.width - 10; height: root.topSize - 4
       radius: height / 2
       gradient: Gradient {                 // the slot it sits in
         GradientStop { position: 0.0; color: Qt.alpha("black", 0.70) }
@@ -2916,7 +2943,7 @@ Item {
     exclusiveZone: root.slide > 0 ? root.bezel : 0
     anchors { bottom: true; left: true; right: true }
     implicitHeight: root.bezel + root.frameRadius
-    mask: Region { item: keyRow; Region { item: pagerRow } }   // only the keys take a touch
+    mask: Region { item: keyRow; Region { item: pagerRow } Region { item: clockKey } }   // only the keys take a touch
 
     ShellPattern {
       id: bezelPattern
@@ -2965,12 +2992,25 @@ Item {
         }
       }
     }
+    // The time; tap for Omarchy's bar (see THE TOP BAR, TUCKED AWAY).
+    KeyCap {
+      id: clockKey
+      visible: root.pagerOn
+      skin: root.skin
+      corner: root.corner
+      x: parent.width - root.railSize - 16 - 3 * 74 - width - 12
+      y: root.frameRadius + (root.bezel - 34) / 2
+      label: Qt.formatTime(root.now, "HH:mm")
+      lit: root.barPeek
+      onPressedDown: root.click()
+      onHit: if (root.topbarPref.trim() !== "show") root.barPeek = !root.barPeek
+    }
     Row {
       id: keyRow
       visible: root.keysShown
       // Centred in what the pager and the meters leave.
       readonly property real from: root.pagerOn ? pagerRow.x + pagerRow.width + 14 : root.railSize
-      readonly property real to: parent.width - root.railSize - (root.pagerOn ? 3 * 74 + 20 : 0)
+      readonly property real to: root.pagerOn ? clockKey.x - 14 : parent.width - root.railSize
       x: Math.max(from, from + (to - from - width) / 2)
       y: root.frameRadius + (root.bezel - 34) / 2
       spacing: root.keySet.length > 10 ? 7 : 9
@@ -3101,7 +3141,7 @@ Item {
       anchors.fill: parent
       readonly property real l: root.dual ? root.railSize : 0
       readonly property real r: width - root.railSize
-      readonly property real t: Style.bar.sizeHorizontal
+      readonly property real t: root.topSize
       readonly property real b: height - root.bezel
       readonly property real rad: root.frameRadius
       readonly property real wall: 3              // the windows' gap to the frame
@@ -3276,7 +3316,7 @@ Item {
       readonly property int startCol: (shown.getDay() + 6) % 7           // weeks start on Monday
       readonly property int days: new Date(shown.getFullYear(), shown.getMonth() + 1, 0).getDate()
       x: root.dual && !root.upright ? root.railSize + 14 : (parent.width - width) / 2
-      y: Math.max(Style.bar.sizeHorizontal + 10, (parent.height - height) / 2 - 40)
+      y: Math.max(root.topSize + 10, (parent.height - height) / 2 - 40)
       width: 420
       height: todayBody.implicitHeight + 40
       radius: Math.max(Style.cornerRadius, 14)
@@ -3396,7 +3436,7 @@ Item {
       // Beside the button that opened it: the top of the left rail (or, with
       // one rail, the middle of the screen).
       x: root.dual && !root.upright ? root.railSize + 14 : (parent.width - width) / 2
-      y: root.dual && !root.upright ? Style.bar.sizeHorizontal + 10 : (parent.height - height) / 2
+      y: root.dual && !root.upright ? root.topSize + 10 : (parent.height - height) / 2
       width: 300
       height: powerList.implicitHeight + 28
       radius: Math.max(Style.cornerRadius, 14)
@@ -3453,7 +3493,7 @@ Item {
     // Everything inside the frame, and none of the frame: the rails stay in
     // reach (Back closes the drawer, the Apps button toggles it).
     margins {
-      top: Style.bar.sizeHorizontal
+      top: root.topSize
       bottom: root.upright ? root.railSize : (root.slide > 0 && root.barSkinned ? root.bezel : 0)
       left: !root.upright && root.dual && root.slide > 0 ? root.railSize : 0
       right: !root.upright && root.slide > 0 ? root.railSize : 0
@@ -3693,6 +3733,8 @@ Item {
                 { v: "scallop", l: "Scallop" }, { v: "flame", l: "Flame" }, { v: "saw", l: "Saw" }] },
             { key: "hide", title: "Slide away when idle", narrow: true, options: [
                 { v: "0", l: "Never" }, { v: "10", l: "10 s" }, { v: "30", l: "30 s" }, { v: "60", l: "1 min" }, { v: "300", l: "5 min" }] },
+            { key: "topbar", title: "Top bar", options: [
+                { v: "hide", l: "Tucked away" }, { v: "show", l: "Always there" }] },
             { key: "keyboard", title: "Keyboard", options: [
                 { v: "split", l: "Split (thumbs)" }, { v: "full", l: "Full width" }] },
             { key: "keys", title: "Key strip", options: [
@@ -3705,6 +3747,7 @@ Item {
             required property var modelData
             readonly property string current: modelData.key === "hide" ? String(Math.round(root.railHideMs / 1000))
               : modelData.key === "keys" ? (["always", "off"].indexOf(root.keysPref.trim()) >= 0 ? root.keysPref.trim() : "auto")
+              : modelData.key === "topbar" ? (root.topbarPref.trim() === "show" ? "show" : "hide")
               : modelData.key === "keyboard" ? (root.keyboardPref.trim() === "full" ? "full" : "split")
               : modelData.key === "buttons" ? (root.buttonShapes[root.buttonsPref.trim()] !== undefined ? root.buttonsPref.trim() : "auto")
               : modelData.key === "edge"
@@ -3732,7 +3775,8 @@ Item {
                   anchors.fill: parent
                   enabled: !parent.off
                   onClicked: {
-                    if (sw2.modelData.key === "keyboard") root.setKeyboard(parent.modelData.v)
+                    if (sw2.modelData.key === "topbar") root.setTopbar(parent.modelData.v)
+                    else if (sw2.modelData.key === "keyboard") root.setKeyboard(parent.modelData.v)
                     else if (sw2.modelData.key === "keys") root.setKeys(parent.modelData.v)
                     else if (sw2.modelData.key === "buttons") root.setButtons(parent.modelData.v)
                     else if (sw2.modelData.key === "hide") root.setHide(parent.modelData.v)
