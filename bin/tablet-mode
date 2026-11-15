@@ -21,7 +21,7 @@ Reactions:
                                      controller, cheetah, tiger, arcade, neon, retro,
                                      candy, lava, galaxy, ice, rainbow, unicorn, fairy,
                                      mermaid, dragon, sunset, watermelon, honeybee,
-                                     circuit, pixel, prism
+                                     circuit, pixel, prism, metal, wood, spaceship
     tablet-mode rotate landscape|portrait|auto
                                      how the screen is turned. landscape and portrait
                                      stay put; auto follows the tablet's orientation
@@ -40,7 +40,8 @@ import sys
 
 # The rails' looks; must match lookNames in shell/plugins/tablet.rail/Main.qml.
 LOOKS = ("theme", "controller", "cheetah", "tiger", "arcade", "neon", "retro", "candy", "lava", "galaxy", "ice",
-         "rainbow", "unicorn", "fairy", "mermaid", "dragon", "sunset", "watermelon", "honeybee", "circuit", "pixel", "prism")
+         "rainbow", "unicorn", "fairy", "mermaid", "dragon", "sunset", "watermelon", "honeybee", "circuit", "pixel", "prism",
+         "metal", "wood", "spaceship")
 STATE_DIR = os.path.join(os.environ.get("XDG_STATE_HOME", os.path.expanduser("~/.local/state")), "tablet-mode")
 CONF_HOME = os.environ.get("XDG_CONFIG_HOME", os.path.expanduser("~/.config"))
 CONF_DIR = os.path.join(CONF_HOME, "tablet-mode")

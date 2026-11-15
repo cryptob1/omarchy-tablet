@@ -29,6 +29,8 @@ No compositor plugin to rebuild on every update, and no new desktop to learn. It
 
 A rail on each edge of the screen, shown while the machine is in tablet mode. Windows stop at them, so they never cover anything. A big tablet is held in both hands with a thumb on each edge, so the buttons are split by hand, and the most used sit lowest.
 
+Every button's touch target is bigger than the button you see: it reaches out to the rail's edges and half-way to its neighbours, so there is no dead space between buttons, and a tap still counts if your thumb rolls off the button as it lifts.
+
 **Right rail**, top to bottom:
 
 | Button | Does |
@@ -59,7 +61,7 @@ A rail on each edge of the screen, shown while the machine is in tablet mode. Wi
 
 ### Looks
 
-<img src="docs/looks.png" alt="Controller, Cheetah, Tiger, Arcade, Neon, Retro, Candy, Lava, Galaxy, Ice" width="430"> <img src="docs/looks2.png" alt="Rainbow, Unicorn, Fairy, Mermaid, Dragon, Sunset, Watermelon, Honeybee, Circuit, Pixel" width="430">
+<img src="docs/looks.png" alt="Controller, Cheetah, Tiger, Arcade, Neon, Retro, Candy, Lava, Galaxy, Ice" width="430"> <img src="docs/looks2.png" alt="Rainbow, Unicorn, Fairy, Mermaid, Dragon, Sunset, Watermelon, Honeybee, Circuit, Pixel" width="430"> <img src="docs/looks3.png" alt="Metal, Wood, Spaceship" width="300">
 
 By default the rails are drawn like every other Omarchy surface: your theme's colours, corner radius, border and gaps. Or pick a controller look, where the rails become a moulded shell flush with the screen edges, the buttons raised caps that sink when pressed, and the scroll strip a ridged thumb wheel:
 
@@ -87,6 +89,9 @@ By default the rails are drawn like every other Omarchy surface: your theme's co
 | `circuit` | A green circuit board with gold solder pads. |
 | `pixel` | Blocky 8-bit blues. |
 | `prism` | Diagonal rainbow stripes, white caps. |
+| `metal` | Brushed steel with rivets down the edges, scratched and dented from use. |
+| `wood` | Grain, knots and a split or two. Brass buttons. |
+| `spaceship` | Hull plating: seams, bolts, vents, warning stripes and status lights. |
 
 Choose one in the settings panel (the cog at the top of the left rail), or with `tablet-mode look <name>`.
 

@@ -103,7 +103,8 @@ Item {
   readonly property var lookNames: ["theme", "controller", "cheetah", "tiger", "arcade", "neon",
                                     "retro", "candy", "lava", "galaxy", "ice",
                                     "rainbow", "unicorn", "fairy", "mermaid", "dragon", "sunset",
-                                    "watermelon", "honeybee", "circuit", "pixel", "prism"]
+                                    "watermelon", "honeybee", "circuit", "pixel", "prism",
+                                    "metal", "wood", "spaceship"]
   function skinFor(name) {
     var bg = Color.popups.background, ac = Color.accent
     switch (name) {
@@ -190,6 +191,20 @@ Item {
         label: "Pixel", shellTop: "#2b2f77", shellBottom: "#141852", cap: "#0d0f2e", legend: "#ffffff",
         accent: "#ff4f7a", close: "#ff4f7a", pattern: "pixels", ink: "transparent", glow: "transparent",
         palette: ["#3b43a8", "#4f58c9", "#232765", "#6c75ff"] }
+    // Materials. These carry wear: scratches and a dent in the metal, knots
+    // and a split in the wood, seams and warning marks on the hull.
+    case "metal": return {
+        label: "Metal", shellTop: "#a4adb6", shellBottom: "#626b75", cap: "#272b30", legend: "#e8edf2",
+        accent: "#ff8a1f", close: "#ff5a4d", pattern: "brushed+scratches+rivets",
+        ink: "#000000", glow: "#ffffff" }
+    case "wood": return {
+        label: "Wood", shellTop: "#b07a45", shellBottom: "#734825", cap: "#2a190d", legend: "#f3ddb8",
+        accent: "#d9a441", close: "#e0553d", pattern: "grain+cracks",
+        ink: "#3a2110", glow: "#d7a06a" }
+    case "spaceship": return {
+        label: "Spaceship", shellTop: "#232e3b", shellBottom: "#0d131b", cap: "#090e14", legend: "#7ff3ff",
+        accent: "#19e3ff", close: "#ff4d5e", pattern: "panels",
+        ink: "#000000", glow: "#19e3ff", barText: "#d8f9ff" }
     }
     return null
   }
@@ -567,6 +582,14 @@ Item {
     signal tapped()
     signal held()
     signal pressedDown()               // the finger landed (for the tap sound)
+    // The touch target is bigger than the disc: it reaches half-way to the
+    // next button and out to the rail's edges, so there are no dead strips
+    // between buttons for a thumb to land in. And a tap counts if the finger
+    // lifts anywhere near where it landed, not only inside the disc: thumbs
+    // roll as they lift.
+    property int reachV: 5
+    property int reachH: 7
+    property int slack: 16
 
     readonly property bool lit: active || area.pressed
     readonly property color capBase: active ? onColor : (skin ? skin.cap : Color.popups.background)
@@ -630,11 +653,18 @@ Item {
     MouseArea {
       id: area
       anchors.fill: parent
+      anchors.topMargin: -b.reachV; anchors.bottomMargin: -b.reachV
+      anchors.leftMargin: -b.reachH; anchors.rightMargin: -b.reachH
+      property bool wasHeld: false
       pressAndHoldInterval: b.holdMs > 0 ? b.holdMs : 800
-      onPressed: { b.pressedDown(); if (b.repeatMs > 0) { b.tapped(); again.interval = 380; again.start() } }
-      onPressAndHold: if (b.holdMs > 0) { b.holding = true; b.held() }
-      onClicked: (mouse) => { if (b.repeatMs === 0 && !(b.holdMs > 0 && mouse.wasHeld)) b.tapped() }
-      onReleased: { b.holding = false; again.stop() }
+      onPressed: { wasHeld = false; b.pressedDown(); if (b.repeatMs > 0) { b.tapped(); again.interval = 380; again.start() } }
+      onPressAndHold: if (b.holdMs > 0) { wasHeld = true; b.holding = true; b.held() }
+      // Not onClicked: that needs the finger to lift inside the area.
+      onReleased: (mouse) => {
+        b.holding = false; again.stop()
+        var near = mouse.x > -b.slack && mouse.y > -b.slack && mouse.x < width + b.slack && mouse.y < height + b.slack
+        if (near && b.repeatMs === 0 && !wasHeld) b.tapped()
+      }
       onCanceled: { b.holding = false; again.stop() }
     }
 
@@ -733,6 +763,7 @@ Item {
     MouseArea {
       id: area
       anchors.fill: parent
+      anchors.margins: -6               // a bigger target than the disc
       onPressed: m.down()
       onReleased: m.up()
       onCanceled: m.up()
@@ -821,6 +852,7 @@ Item {
     MouseArea {
       id: area
       anchors.fill: parent
+      anchors.leftMargin: -7; anchors.rightMargin: -7      // out to the rail's edges
       preventStealing: true
       onPressed: (mouse) => {
         fling.stop()
@@ -934,22 +966,23 @@ Item {
 
     MouseArea {
       id: upArea
-      width: parent.width; height: parent.height / 3
+      x: -7; y: -5
+      width: parent.width + 14; height: parent.height / 3 + 5
       onPressed: { rk.pressedDown(); rk.up(); again.dir = 1; again.interval = 380; again.start() }
       onReleased: again.stop()
       onCanceled: again.stop()
     }
     MouseArea {
       id: midArea
-      y: parent.height / 3
-      width: parent.width; height: parent.height / 3
+      x: -7; y: parent.height / 3
+      width: parent.width + 14; height: parent.height / 3
       onPressed: rk.pressedDown()
       onClicked: rk.middle()
     }
     MouseArea {
       id: downArea
-      y: parent.height * 2 / 3
-      width: parent.width; height: parent.height / 3
+      x: -7; y: parent.height * 2 / 3
+      width: parent.width + 14; height: parent.height / 3 + 5
       onPressed: { rk.pressedDown(); rk.down(); again.dir = -1; again.interval = 380; again.start() }
       onReleased: again.stop()
       onCanceled: again.stop()
@@ -1278,6 +1311,156 @@ Item {
             c.strokeStyle = ink; c.stroke()
             c.beginPath(); c.arc(x, y, 2.6, 0, 6.283); c.fillStyle = glow; c.fill()      // a solder pad
             c.beginPath(); c.arc(x, y, 1.0, 0, 6.283); c.fillStyle = "#99000000"; c.fill()
+          }
+        } else if (pat === "brushed") {
+          // Brushed metal: hundreds of faint hairlines along the piece's length.
+          var lengthwise = w > h * 3
+          for (i = 0; i < (lengthwise ? h : w) * 2.2; i++) {
+            c.globalAlpha = 0.03 + rnd() * 0.09
+            c.fillStyle = rnd() < 0.5 ? glow : ink
+            if (lengthwise) c.fillRect(X0, Y0 + rnd() * h, w, 0.6 + rnd() * 0.8)
+            else c.fillRect(X0 + rnd() * w, Y0, 0.6 + rnd() * 0.8, h)
+          }
+        } else if (pat === "scratches") {
+          // Wear: fine scratches, each a bright cut with a dark shoulder; and
+          // a dent or two, a hollow that is dark on one side and lit on the other.
+          for (i = 0; i < w * h / 2100; i++) {
+            x = X0 + rnd() * w; y = Y0 + rnd() * h
+            var ang = rnd() * 6.283, len2 = 5 + rnd() * rnd() * 46, lw = 0.5 + rnd() * 0.7
+            var dx = Math.cos(ang) * len2, dy = Math.sin(ang) * len2, bow = (rnd() - 0.5) * 6
+            c.lineWidth = lw
+            c.globalAlpha = 0.20 + rnd() * 0.25; c.strokeStyle = ink
+            c.beginPath(); c.moveTo(x + 0.8, y + 0.8); c.quadraticCurveTo(x + dx / 2 + bow + 0.8, y + dy / 2 + 0.8, x + dx + 0.8, y + dy + 0.8); c.stroke()
+            c.globalAlpha = 0.25 + rnd() * 0.35; c.strokeStyle = glow
+            c.beginPath(); c.moveTo(x, y); c.quadraticCurveTo(x + dx / 2 + bow, y + dy / 2, x + dx, y + dy); c.stroke()
+          }
+          for (i = 0; i < Math.max(1, w * h / 26000); i++) {
+            x = X0 + 10 + rnd() * (w - 20); y = Y0 + 10 + rnd() * (h - 20)
+            var dr = Math.min(6 + rnd() * 8, Math.min(w, h) * 0.42)
+            var dg = c.createRadialGradient(x - dr * 0.25, y - dr * 0.25, 0, x, y, dr)
+            dg.addColorStop(0, "rgba(0,0,0,0.34)"); dg.addColorStop(0.7, "rgba(0,0,0,0.10)"); dg.addColorStop(1, "rgba(0,0,0,0)")
+            c.globalAlpha = 1; c.fillStyle = dg
+            c.beginPath(); c.arc(x, y, dr, 0, 6.283); c.fill()
+            c.strokeStyle = "rgba(255,255,255,0.22)"; c.lineWidth = 1
+            c.beginPath(); c.arc(x, y, dr * 0.86, 0.5, 2.3); c.stroke()
+          }
+        } else if (pat === "rivets") {
+          // A row of rivets down each long edge (not on the thin strips).
+          if (!(w > h * 3)) {
+            for (y = Y0 + 16; y < Y1 - 8; y += 58) {
+              for (k = 0; k < 2; k++) {
+                x = k ? X1 - 6 : X0 + 6
+                c.globalAlpha = 0.55; c.fillStyle = ink
+                c.beginPath(); c.arc(x + 0.6, y + 0.8, 2.6, 0, 6.283); c.fill()
+                c.globalAlpha = 0.9; c.fillStyle = "#8d959e"
+                c.beginPath(); c.arc(x, y, 2.3, 0, 6.283); c.fill()
+                c.globalAlpha = 0.75; c.fillStyle = glow
+                c.beginPath(); c.arc(x - 0.7, y - 0.7, 0.9, 0, 6.283); c.fill()
+              }
+            }
+          }
+        } else if (pat === "grain") {
+          // Wood grain: long wandering lines down the length, and a few knots
+          // the grain circles round.
+          var lw2 = w > h * 3, span2 = lw2 ? h : w, run = lw2 ? w : h
+          for (var gpos = -2; gpos < span2 + 2; gpos += 2.2 + rnd() * 3.4) {
+            var ph = rnd() * 6.283, wav = 40 + rnd() * 90, amp = 0.8 + rnd() * 2.4
+            c.globalAlpha = 0.10 + rnd() * 0.26
+            c.strokeStyle = rnd() < 0.22 ? glow : ink
+            c.lineWidth = 0.6 + rnd() * 1.3
+            c.beginPath()
+            for (var d2 = 0; d2 <= run; d2 += 6) {
+              var off = gpos + Math.sin(ph + d2 / wav * 6.283) * amp + Math.sin(ph * 1.7 + d2 / 17) * 0.5
+              if (lw2) { if (d2 === 0) c.moveTo(X0 + d2, Y0 + off); else c.lineTo(X0 + d2, Y0 + off) }
+              else { if (d2 === 0) c.moveTo(X0 + off, Y0 + d2); else c.lineTo(X0 + off, Y0 + d2) }
+            }
+            c.stroke()
+          }
+          for (i = 0; i < Math.max(1, Math.round(run / 300)); i++) {
+            var kx2 = lw2 ? X0 + rnd() * w : X0 + 12 + rnd() * (w - 24)
+            var ky2 = lw2 ? Y0 + h / 2 : Y0 + 30 + rnd() * (h - 60)
+            var kr = lw2 ? h * 0.3 : 5 + rnd() * 5
+            for (k = 5; k >= 1; k--) {
+              c.globalAlpha = 0.16 + (6 - k) * 0.07
+              c.strokeStyle = ink; c.lineWidth = 1
+              c.beginPath()
+              c.save(); c.translate(kx2, ky2); c.scale(lw2 ? 1.7 : 1, lw2 ? 1 : 1.7)
+              c.arc(0, 0, kr * k / 3.2, 0, 6.283)
+              c.restore(); c.stroke()
+            }
+            c.globalAlpha = 0.6; c.fillStyle = ink
+            c.beginPath(); c.arc(kx2, ky2, kr * 0.28, 0, 6.283); c.fill()
+          }
+        } else if (pat === "cracks") {
+          // A split or two along the grain: a dark jagged line with a pale lip.
+          var lw3 = w > h * 3
+          for (i = 0; i < (lw3 ? 2 : Math.max(2, Math.round(h / 330))); i++) {
+            var cx3 = lw3 ? X0 + rnd() * w : X0 + 8 + rnd() * (w - 16)
+            var cy3 = lw3 ? Y0 + 4 + rnd() * (h - 8) : Y0 + rnd() * h
+            var seg = 6 + Math.floor(rnd() * 9), pts3 = [[cx3, cy3]]
+            for (k = 0; k < seg; k++) {
+              var adv = 6 + rnd() * 10, side = (rnd() - 0.5) * 5
+              cx3 += lw3 ? adv : side; cy3 += lw3 ? side * 0.5 : adv
+              pts3.push([cx3, cy3])
+            }
+            for (var pass = 0; pass < 2; pass++) {
+              c.globalAlpha = pass ? 0.8 : 0.35
+              c.strokeStyle = pass ? "#1a0d05" : glow
+              c.lineWidth = pass ? 1.4 : 1
+              c.beginPath()
+              for (k = 0; k < pts3.length; k++) {
+                var qx = pts3[k][0] + (pass ? 0 : 1), qy = pts3[k][1] + (pass ? 0 : 0.6)
+                if (k === 0) c.moveTo(qx, qy); else c.lineTo(qx, qy)
+              }
+              c.stroke()
+            }
+          }
+        } else if (pat === "panels") {
+          // A ship's hull: plates with seams between them, and on the plates
+          // the odd vent, warning stripe, status light and bolt. A lit conduit
+          // runs the length of the edge that faces the screen.
+          var lw4 = w > h * 3, run4 = lw4 ? w : h, span4 = lw4 ? h : w, at = 0
+          function P(a, b2) { return lw4 ? [X0 + a, Y0 + b2] : [X0 + b2, Y0 + a] }   // (along, across)
+          function box(a, b2, la, lb) { var q0 = P(a, b2); c.fillRect(q0[0], q0[1], lw4 ? la : lb, lw4 ? lb : la) }
+          while (at < run4) {
+            var plate = 70 + rnd() * 120
+            c.globalAlpha = 0.55; c.fillStyle = ink; box(at, 0, 1.5, span4)          // the seam
+            c.globalAlpha = 0.14; c.fillStyle = "#ffffff"; box(at + 1.5, 0, 1, span4)   // its lit lip
+            var what = rnd(), mid = at + plate * (0.3 + rnd() * 0.4)
+            if (what < 0.3 && span4 > 30) {                        // a vent: a rack of slats
+              for (k = 0; k < 5; k++) {
+                c.globalAlpha = 0.6; c.fillStyle = ink; box(mid + k * 5, span4 * 0.22, 2.2, span4 * 0.56)
+                c.globalAlpha = 0.12; c.fillStyle = "#ffffff"; box(mid + k * 5 + 2.2, span4 * 0.22, 0.8, span4 * 0.56)
+              }
+            } else if (what < 0.52 && span4 > 30) {                // a warning stripe
+              var hx = P(mid, span4 * 0.2)
+              c.save(); c.beginPath()
+              c.rect(hx[0], hx[1], lw4 ? 26 : span4 * 0.6, lw4 ? span4 * 0.6 : 9); c.clip()
+              for (k = -4; k < 12; k++) {
+                c.globalAlpha = 0.85; c.fillStyle = k % 2 ? "#f2c200" : "#16181c"
+                c.beginPath()
+                c.moveTo(hx[0] + k * 7, hx[1] - 2); c.lineTo(hx[0] + k * 7 + 7, hx[1] - 2)
+                c.lineTo(hx[0] + k * 7 - 5, hx[1] + 60); c.lineTo(hx[0] + k * 7 - 12, hx[1] + 60)
+                c.closePath(); c.fill()
+              }
+              c.restore()
+            } else if (what < 0.8) {                               // a status light, with a halo
+              var lp = P(mid, span4 * (0.2 + rnd() * 0.6)), lc = rnd() < 0.25 ? "#ff4d5e" : glow
+              var hg = c.createRadialGradient(lp[0], lp[1], 0, lp[0], lp[1], 8)
+              hg.addColorStop(0, lc); hg.addColorStop(1, "rgba(0,0,0,0)")
+              c.globalAlpha = 0.5; c.fillStyle = hg; c.beginPath(); c.arc(lp[0], lp[1], 8, 0, 6.283); c.fill()
+              c.globalAlpha = 1; c.fillStyle = lc; c.beginPath(); c.arc(lp[0], lp[1], 1.6, 0, 6.283); c.fill()
+            }
+            for (k = 0; k < 2; k++) {                              // a bolt each side of the seam
+              var bp = P(at + 7, k ? span4 - 6 : 6)
+              c.globalAlpha = 0.6; c.fillStyle = ink; c.beginPath(); c.arc(bp[0], bp[1], 1.8, 0, 6.283); c.fill()
+              c.globalAlpha = 0.35; c.fillStyle = "#ffffff"; c.beginPath(); c.arc(bp[0] - 0.5, bp[1] - 0.5, 0.7, 0, 6.283); c.fill()
+            }
+            at += plate
+          }
+          for (var tick = 0; tick < run4; tick += 8) {             // a scale along the outer edge
+            c.globalAlpha = 0.28; c.fillStyle = glow
+            box(tick, 1.5, 1, tick % 40 === 0 ? 5 : 2.5)
           }
         } else if (pat === "pixels") {
           var px = 8
