@@ -2,7 +2,7 @@
 
 **Omarchy, on a tablet.**
 
-![A terminal between the two rails, in the Cheetah look](docs/hero.png)
+![A terminal set into the frame, in the Metal look](docs/hero.png)
 
 Big tablets have never been good computers. The hardware has been ready for years: a 13-inch slate today has a screen as large as a laptop's and a processor that keeps up with one. What has never arrived is software that makes use of it. A phone interface stretched across thirteen inches wastes the screen. A desktop interface with the keyboard taken away is worse: there is no way to close a window, switch to another one, or type a password. So the big tablet ends up as the device you watch films on, next to the computer you actually work on.
 
@@ -21,7 +21,9 @@ No compositor plugin to rebuild on every update, and no new desktop to learn. It
 | | |
 |---|---|
 | ![The plain Omarchy look](docs/plain.png) | ![The settings panel](docs/settings.png) |
-| The default look follows your Omarchy theme. | The settings panel: looks, one rail or two, button sounds. |
+| The default look follows your Omarchy theme. | The settings panel: looks, rotation, one rail or two, button sounds. |
+| ![The Spaceship look](docs/spaceship.png) | ![The Wood look](docs/wood.png) |
+| Spaceship: hull plates, warning stripes, status lights. | Wood: grain, knots and a split or two. |
 
 ## What you get
 
@@ -94,6 +96,8 @@ By default the rails are drawn like every other Omarchy surface: your theme's co
 | `spaceship` | Hull plating: seams, bolts, vents, warning stripes and status lights. |
 
 Choose one in the settings panel (the cog at the top of the left rail), or with `tablet-mode look <name>`.
+
+**Made to look like a thing you are holding.** In a controller look the screen is set down into the frame: a lit lip where the frame ends, the dark wall of the recess, and the shadow the frame throws across the edge of the screen. Every button sits in a socket cut into the shell, with its legend engraved. The frame's outer edges are chamfered, light falls across it from above, and polished materials throw it back in broad bands.
 
 **The bar joins in.** With a controller look on, Omarchy's top bar is drawn in the same shell, pattern and all, and meets the rails in rounded inside corners; a thin bezel in the same shell closes the frame along the bottom (it takes 8 px of height), so the screen sits inside one object. The bar's writing switches to dark or light to suit. With the plain look, with the keyboard attached, or with the bar somewhere other than the top, the bar is left exactly as your theme has it.
 

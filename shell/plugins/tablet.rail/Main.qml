@@ -195,11 +195,11 @@ Item {
     // and a split in the wood, seams and warning marks on the hull.
     case "metal": return {
         label: "Metal", shellTop: "#a4adb6", shellBottom: "#626b75", cap: "#272b30", legend: "#e8edf2",
-        accent: "#ff8a1f", close: "#ff5a4d", pattern: "brushed+scratches+rivets",
+        accent: "#ff8a1f", close: "#ff5a4d", pattern: "brushed+sheen+scratches+rivets",
         ink: "#000000", glow: "#ffffff" }
     case "wood": return {
         label: "Wood", shellTop: "#b07a45", shellBottom: "#734825", cap: "#2a190d", legend: "#f3ddb8",
-        accent: "#d9a441", close: "#e0553d", pattern: "grain+cracks",
+        accent: "#d9a441", close: "#e0553d", pattern: "grain+cracks+sheen",
         ink: "#3a2110", glow: "#d7a06a" }
     case "spaceship": return {
         label: "Spaceship", shellTop: "#232e3b", shellBottom: "#0d131b", cap: "#090e14", legend: "#7ff3ff",
@@ -249,7 +249,7 @@ Item {
   // A rim skin keeps its coloured edge. Otherwise the edge is a thin dark seam:
   // the frame is shaded to fall away into the screen, and a pale line there (as
   // it was) made a second border round the windows' own.
-  readonly property color frameEdge: !skin ? "transparent" : (skin.rim ? skin.rim : Qt.alpha("black", 0.55))
+  readonly property color frameEdge: !skin ? "transparent" : (skin.rim ? skin.rim : Qt.alpha("black", 0.0))
   readonly property int frameEdgeWidth: skin && skin.rim ? 3 : 1
   readonly property string barWanted: barSkinned ? barText : ""
   onBarWantedChanged: applyBar()
@@ -611,6 +611,17 @@ Item {
       GradientStop { position: 0.5; color: b.capBase }
       GradientStop { position: 1.0; color: area.pressed ? Qt.tint(b.capBase, Qt.alpha("white", 0.08)) : Qt.darker(b.capBase, 1.45) }
     }
+    Rectangle {       // the socket: a recess in the shell the cap sits in. Its
+      visible: b.cap  // upper lip is in shadow, its lower lip catches the light.
+      z: -2
+      anchors.centerIn: parent
+      width: parent.width + 8; height: parent.height + 8; radius: width / 2
+      gradient: Gradient {
+        GradientStop { position: 0.0; color: Qt.alpha("black", 0.62) }
+        GradientStop { position: 0.55; color: Qt.alpha("black", 0.30) }
+        GradientStop { position: 1.0; color: Qt.alpha("white", 0.30) }
+      }
+    }
     Rectangle {       // the shadow the cap throws on the shell
       visible: b.cap && !area.pressed
       z: -1
@@ -646,8 +657,9 @@ Item {
                    : (b.lit ? Color.background : Color.popups.text)
       font.pixelSize: b.glyphSize
       font.bold: b.boldGlyph
-      style: Text.Outline
-      styleColor: (b.cap || b.fill > 0.9) ? "transparent" : b.idleColor
+      // On a cap the legend is cut into the surface: a dark edge above it.
+      style: b.cap ? Text.Sunken : Text.Outline
+      styleColor: b.cap ? Qt.alpha("black", 0.55) : (b.fill > 0.9 ? "transparent" : b.idleColor)
     }
 
     MouseArea {
@@ -709,6 +721,17 @@ Item {
       GradientStop { position: 0.0; color: area.pressed ? Qt.darker(m.capBase, 1.3) : Qt.lighter(m.capBase, 1.25) }
       GradientStop { position: 0.5; color: m.capBase }
       GradientStop { position: 1.0; color: area.pressed ? Qt.lighter(m.capBase, 1.1) : Qt.darker(m.capBase, 1.4) }
+    }
+    Rectangle {       // the socket (see TouchButton)
+      visible: m.cap
+      z: -2
+      anchors.centerIn: parent
+      width: parent.width + 8; height: parent.height + 8; radius: width / 2
+      gradient: Gradient {
+        GradientStop { position: 0.0; color: Qt.alpha("black", 0.62) }
+        GradientStop { position: 0.55; color: Qt.alpha("black", 0.30) }
+        GradientStop { position: 1.0; color: Qt.alpha("white", 0.30) }
+      }
     }
     Rectangle {
       visible: m.cap && !area.pressed
@@ -813,6 +836,17 @@ Item {
                : Qt.alpha(Color.popups.text, area.pressed || fling.running ? 0.16 : 0.07)
     border.width: cap ? 1.5 : 0
     border.color: Qt.alpha("black", 0.6)
+    Rectangle {       // the slot the wheel turns in
+      visible: st.cap
+      z: -2
+      anchors.centerIn: parent
+      width: parent.width + 8; height: parent.height + 8; radius: parent.radius + 4
+      gradient: Gradient {
+        GradientStop { position: 0.0; color: Qt.alpha("black", 0.62) }
+        GradientStop { position: 0.5; color: Qt.alpha("black", 0.28) }
+        GradientStop { position: 1.0; color: Qt.alpha("white", 0.30) }
+      }
+    }
     Behavior on color { ColorAnimation { duration: 120 } }
 
     Text {
@@ -913,6 +947,17 @@ Item {
     radius: width / 2
     border.color: cap ? Qt.alpha("black", 0.6) : Color.popups.border
     border.width: cap ? 1.5 : 2
+    Rectangle {       // the socket (see TouchButton)
+      visible: rk.cap
+      z: -2
+      anchors.centerIn: parent
+      width: parent.width + 8; height: parent.height + 8; radius: width / 2
+      gradient: Gradient {
+        GradientStop { position: 0.0; color: Qt.alpha("black", 0.62) }
+        GradientStop { position: 0.5; color: Qt.alpha("black", 0.28) }
+        GradientStop { position: 1.0; color: Qt.alpha("white", 0.30) }
+      }
+    }
     Rectangle {
       visible: rk.cap
       z: -1
@@ -1312,6 +1357,16 @@ Item {
             c.beginPath(); c.arc(x, y, 2.6, 0, 6.283); c.fillStyle = glow; c.fill()      // a solder pad
             c.beginPath(); c.arc(x, y, 1.0, 0, 6.283); c.fillStyle = "#99000000"; c.fill()
           }
+        } else if (pat === "sheen") {
+          // Polished surfaces throw the light back in broad soft bands. Laid
+          // out in screen coordinates, so a band crosses from bar to rail.
+          for (k = -2; k < 5; k++) {
+            var bx = k * 430 + 120
+            var gg = c.createLinearGradient(bx, 0, bx + 150, 150 * 0.55)
+            gg.addColorStop(0, "rgba(255,255,255,0)"); gg.addColorStop(0.5, "rgba(255,255,255,0.20)"); gg.addColorStop(1, "rgba(255,255,255,0)")
+            c.globalAlpha = 1; c.fillStyle = gg
+            c.fillRect(X0, Y0, w, h)
+          }
         } else if (pat === "brushed") {
           // Brushed metal: hundreds of faint hairlines along the piece's length.
           var lengthwise = w > h * 3
@@ -1487,6 +1542,9 @@ Item {
         sg.addColorStop(1, "rgba(0,0,0,0.30)")
         c.fillStyle = sg; c.fillRect(0, frameFlip ? top : 0, w, band)
         if (framed) { c.fillStyle = "rgba(0,0,0,0.30)"; c.fillRect(0, frameFlip ? 0 : band, w, top) }
+        // The chamfer along the outer edge, as on the rails.
+        c.fillStyle = "rgba(255,255,255,0.42)"; c.fillRect(0, frameFlip ? h - 1 : 0, w, 1)
+        c.fillStyle = "rgba(0,0,0,0.22)"; c.fillRect(0, frameFlip ? h - 2.5 : 1, w, 1.5)
       }
       c.restore()
       if (framed && edge.a > 0) {       // the frame's inside edge, round the corners
@@ -1595,6 +1653,16 @@ Item {
           GradientStop { position: 0.55; color: "transparent" }
           GradientStop { position: 1.0; color: Qt.alpha("white", 0.14) }
         }
+      }
+      Rectangle {       // the chamfer along the outer edge: a bright line, a dark one inside it
+        visible: root.skin !== null && !rail.upright
+        x: parent.width - 1; width: 1; height: parent.height
+        color: Qt.alpha("white", 0.42)
+      }
+      Rectangle {
+        visible: root.skin !== null && !rail.upright
+        x: parent.width - 2.5; width: 1.5; height: parent.height
+        color: Qt.alpha("black", 0.22)
       }
       CharField {
         anchors.fill: parent
@@ -1830,6 +1898,16 @@ Item {
           GradientStop { position: 0.45; color: "transparent" }
           GradientStop { position: 1.0; color: Qt.alpha("black", 0.30) }
         }
+      }
+      Rectangle {
+        visible: root.skin !== null
+        x: 0; width: 1; height: parent.height
+        color: Qt.alpha("white", 0.42)
+      }
+      Rectangle {
+        visible: root.skin !== null
+        x: 1; width: 1.5; height: parent.height
+        color: Qt.alpha("black", 0.22)
       }
       CharField {
         anchors.fill: parent
@@ -2069,6 +2147,73 @@ Item {
       seed: 61
       ink: root.skin ? root.skin.ink : "transparent"
       glow: root.skin ? root.skin.glow : "transparent"
+    }
+  }
+
+  // The screen sits BELOW the frame's surface, and this is what says so: where
+  // the frame ends there is a lit lip, then the dark wall of the recess (it
+  // fills the few pixels the windows leave, where the wallpaper used to show
+  // through as a coloured line), then the shadow the frame throws across the
+  // edge of the screen. Drawn over the windows and never touchable.
+  PanelWindow {
+    id: recess
+    visible: root.framed
+    screen: Quickshell.screens.length > 0 ? Quickshell.screens[0] : null
+    color: "transparent"
+    WlrLayershell.namespace: "omarchy-tablet-bar"
+    WlrLayershell.layer: WlrLayer.Top
+    WlrLayershell.keyboardFocus: WlrKeyboardFocus.None
+    exclusionMode: ExclusionMode.Ignore
+    anchors { top: true; bottom: true; left: true; right: true }
+    mask: Region {}
+
+    Canvas {
+      id: recessCanvas
+      anchors.fill: parent
+      readonly property real l: root.dual ? root.railSize : 0
+      readonly property real r: width - root.railSize
+      readonly property real t: Style.bar.sizeHorizontal
+      readonly property real b: height - root.bezel
+      readonly property real rad: root.frameRadius
+      readonly property real wall: 3              // the windows' gap to the frame
+      onWidthChanged: requestPaint()
+      onHeightChanged: requestPaint()
+      onLChanged: requestPaint()
+      onTChanged: requestPaint()
+      onVisibleChanged: requestPaint()
+      onPaint: {
+        var c = getContext("2d")
+        c.reset()
+        if (!visible || width < 8) return
+        function ring(inset, rr) {                 // the recess outline, `inset` px inside it
+          var x0 = l + inset, y0 = t + inset, x1 = r - inset, y1 = b - inset, q = Math.max(0.5, rr - inset)
+          c.beginPath()
+          c.moveTo(x0 + q, y0); c.lineTo(x1 - q, y0); c.arcTo(x1, y0, x1, y0 + q, q)
+          c.lineTo(x1, y1 - q); c.arcTo(x1, y1, x1 - q, y1, q)
+          c.lineTo(x0 + q, y1); c.arcTo(x0, y1, x0, y1 - q, q)
+          c.lineTo(x0, y0 + q); c.arcTo(x0, y0, x0 + q, y0, q)
+          c.closePath()
+        }
+        // Nothing outside the recess: the frame itself is drawn elsewhere.
+        ring(0, rad); c.save(); c.clip()
+        // The wall of the recess.
+        c.strokeStyle = "rgba(6,7,10,0.96)"; c.lineWidth = wall * 2
+        ring(0, rad); c.stroke()
+        // The frame's shadow on the screen: deepest against the wall, gone in
+        // a dozen pixels; and heavier under the top edge, where the light is.
+        for (var i = 1; i <= 7; i++) {
+          c.strokeStyle = "rgba(0,0,0," + (0.085 - i * 0.008).toFixed(3) + ")"
+          c.lineWidth = (wall + i * 2.2) * 2
+          ring(0, rad); c.stroke()
+        }
+        var g = c.createLinearGradient(0, t, 0, t + 26)
+        g.addColorStop(0, "rgba(0,0,0,0.30)"); g.addColorStop(1, "rgba(0,0,0,0)")
+        c.fillStyle = g; c.fillRect(l, t, r - l, 26)
+        c.restore()
+        // The lip: light catching the edge where the frame turns down.
+        c.strokeStyle = "rgba(255,255,255,0.38)"; c.lineWidth = 1
+        ring(-0.5, rad); c.stroke()
+      }
     }
   }
 
