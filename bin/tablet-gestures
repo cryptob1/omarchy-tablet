@@ -768,6 +768,7 @@ def run(node):
         peak = 0          # most fingers down at once in this sequence
         scroll = None     # the two-finger drag in progress, if any
         marked = None     # when the touch mark was last refreshed
+        recent = []       # normalised points where the last few touches began
         touched = None    # when a finger was last seen on the glass
         began = None      # wall-clock start of this touch sequence
         pressed = False   # the long press of this sequence has fired
@@ -818,6 +819,10 @@ def run(node):
                         write_run("touch-down", f"{began:.3f}\n")   # tablet-touch: ends the mic focus lock
                         x, y = next(iter(down.values()))
                         MENU.touch(x / xr, y / yr)
+                        # Where the last few touches began: tablet-touch aims the
+                        # scroll strip at a panel by the last touch that was on it.
+                        recent = ([(x / xr, y / yr)] + recent)[:4]
+                        write_run("touches", "".join(f"{a:.4f} {b:.4f}\n" for a, b in recent))
                     if pos:
                         if burst_start(now, touched):
                             lock_keyboard()

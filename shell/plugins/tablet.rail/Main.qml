@@ -319,6 +319,16 @@ Item {
     onLoadFailed: root.topbarPref = "hide"
   }
 
+  // THE RAILS ARE ON TOP. Omarchy's panels (Wi-Fi, Bluetooth, power, the
+  // menus) are full-screen Overlay surfaces that close on a touch outside
+  // their card. On the Top layer the rails were under them, so reaching for
+  // the scroll strip to scroll a panel's list closed the panel. The rails are
+  // Overlay surfaces too, kept above the rest by a rule in the Hyprland
+  // fragment. An Overlay surface would also sit on a fullscreen window, which
+  // a Top one does not, so the rails step aside for one themselves.
+  readonly property bool fullNow: Hyprland.focusedWorkspace !== null && Hyprland.focusedWorkspace.hasFullscreen
+                                  && activeTop !== null && activeTop.fullscreen === true
+
   // THE PAGER. The desktops, as numbered keys at the left end of the bottom
   // band: tap one to go there, hold one to take the focused window there. The
   // one you are on is lit, empty ones are faint. While the band is up the
@@ -2218,7 +2228,7 @@ Item {
 
   PanelWindow {
     id: rail
-    visible: root.noKeyboard && root.slide > 0
+    visible: root.noKeyboard && root.slide > 0 && !root.fullNow
     screen: Quickshell.screens.length > 0 ? Quickshell.screens[0] : null
     // Sliding away: off its own edge (the bottom, when upright).
     margins {
@@ -2231,7 +2241,7 @@ Item {
     // This name is what bin/tablet-gestures matches (IGNORE_LAYERS) to keep
     // touches here out of its gestures.
     WlrLayershell.namespace: "omarchy-tablet-rail"
-    WlrLayershell.layer: WlrLayer.Top
+    WlrLayershell.layer: WlrLayer.Overlay   // see THE RAILS ARE ON TOP
     WlrLayershell.keyboardFocus: WlrKeyboardFocus.None
     exclusiveZone: root.slide > 0 ? root.railSize + root.edgeGap : 0
     anchors { right: true; bottom: true; top: !rail.upright; left: rail.upright }
@@ -2556,12 +2566,12 @@ Item {
   // awake out of the way at the top.
   PanelWindow {
     id: railLeft
-    visible: root.noKeyboard && root.dual && root.slide > 0
+    visible: root.noKeyboard && root.dual && root.slide > 0 && !root.fullNow
     screen: Quickshell.screens.length > 0 ? Quickshell.screens[0] : null
     margins { left: -(1 - root.slide) * railLeft.width }
     color: "transparent"
     WlrLayershell.namespace: "omarchy-tablet-rail"
-    WlrLayershell.layer: WlrLayer.Top
+    WlrLayershell.layer: WlrLayer.Overlay   // see THE RAILS ARE ON TOP
     WlrLayershell.keyboardFocus: WlrKeyboardFocus.None
     exclusiveZone: root.slide > 0 ? root.railSize + root.edgeGap : 0
     anchors { left: true; top: true; bottom: true }

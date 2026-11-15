@@ -140,8 +140,69 @@ def open_picker():
     return None
 
 
+OURS = ("omarchy-tablet", "wvkbd", "cortex", "omarchy-notifications")
+
+
+def open_panel(layers):
+    """(x, y, w, h) of an open full-screen Overlay surface that is not ours: one
+    of Omarchy's panels, which have their card somewhere on it. None if none."""
+    for mon in (layers or {}).values():
+        for layer in (mon.get("levels") or {}).get("3", []):
+            name = layer.get("namespace") or ""
+            if name.startswith(OURS) or name in PICKERS:
+                continue
+            if layer.get("w", 0) >= 600 and layer.get("h", 0) >= 500:
+                return layer["x"], layer["y"], layer["w"], layer["h"]
+    return None
+
+
+def panel_spot(panel, layers, touches):
+    """Where on a panel to send the wheel: where the last touch that was on it
+    (and not on a rail or the keyboard) began; failing that, under the right
+    end of the bar, where the panels hang. `touches`: layout points, newest first."""
+    x, y, w, h = panel
+    rects = [(l["x"], l["y"], l["w"], l["h"]) for mon in (layers or {}).values()
+             for level in (mon.get("levels") or {}).values() for l in level
+             if (l.get("namespace") or "").startswith(("omarchy-tablet", "wvkbd"))]
+    for tx, ty in touches:
+        if any(rx <= tx < rx + rw and ry <= ty < ry + rh for rx, ry, rw, rh in rects):
+            continue
+        if x <= tx < x + w and y <= ty < y + h:
+            return tx, ty
+    return x + w - 200, y + 150
+
+
+def recent_touches():
+    """Layout points where the last few touches began, newest first."""
+    try:
+        mon = next(m for m in json.loads(hyprctl("monitors", "-j") or "[]") if m.get("focused"))
+        scale = float(mon.get("scale") or 1) or 1
+        w, h = mon["width"] / scale, mon["height"] / scale
+        turn = int(mon.get("transform") or 0) % 4
+        if turn % 2:
+            w, h = h, w
+        out = []
+        with open(os.path.join(RUN_DIR, "touches")) as f:
+            for line in f:
+                ux, uy = (float(v) for v in line.split())
+                for _ in range(turn):
+                    ux, uy = 1 - uy, ux
+                out.append((int(mon.get("x", 0) + ux * w), int(mon.get("y", 0) + uy * h)))
+        return out
+    except (OSError, ValueError, KeyError, StopIteration, subprocess.SubprocessError):
+        return []
+
+
 def scroll_aim():
     spot = open_picker()
+    if not spot:
+        try:
+            layers = json.loads(hyprctl("layers", "-j") or "{}")
+        except (ValueError, OSError, subprocess.SubprocessError):
+            layers = {}
+        panel = open_panel(layers)
+        if panel:
+            spot = panel_spot(panel, layers, recent_touches())
     if spot:
         hyprctl("dispatch", f"hl.dsp.cursor.move({{ x = {spot[0]}, y = {spot[1]} }})")
     else:

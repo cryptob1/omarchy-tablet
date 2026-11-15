@@ -26,6 +26,9 @@ hl.layer_rule({ name = "tablet-keys-above-lock", match = { namespace = "^omarchy
 hl.layer_rule({ name = "tablet-osk-on-top", match = { namespace = "wvkbd" }, order = -100 })
 -- The same for the split thumb keyboard (shell plugin tablet.rail).
 hl.layer_rule({ name = "tablet-keys-on-top", match = { namespace = "^omarchy-tablet-keys$" }, order = -100 })
+-- And for the rails: a touch on the scroll strip must reach it, not close the
+-- panel it is about to scroll.
+hl.layer_rule({ name = "tablet-rail-on-top", match = { namespace = "^omarchy-tablet-rail$" }, order = -90 })
 
 -- The button rail (shell plugin tablet.rail) is a see-through card like
 -- Omarchy's own surfaces. Blur what is behind it whenever blur is on at all
