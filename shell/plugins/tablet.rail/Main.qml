@@ -283,6 +283,81 @@ Item {
     stdout: SplitParser { onRead: (line) => root.canAuto = String(line).trim() === "yes" }
   }
   function setRotation(v) { rotationPref = v; run([home + "/.local/bin/tablet-mode", "rotate", v]) }
+  // `tablet-mode edge straight|lightning|wave|scallop|flame|saw`: the SHAPE of
+  // the side of each rail that faces the screen. Shaped, the rail bulges up to
+  // `overhang` px over the edge of the windows (drawn over them; touches there
+  // still go to the window), and the recess, its lip and its shadow follow the
+  // same outline. Only with a controller look, in the closed two-edge frame.
+  property string edgePref: "straight"
+  readonly property var edgeNames: ["straight", "lightning", "wave", "scallop", "flame", "saw"]
+  readonly property int overhang: 15
+  readonly property bool shaped: framed && edgePref.trim() !== "straight" && edgeNames.indexOf(edgePref.trim()) > 0
+  // How far the edge stands out at each 2 px down a rail `h` tall: a list of
+  // numbers in [0, overhang]. It eases to nothing at both ends, so the corners
+  // where the rails meet the bar and the bezel stay as they are. Seeded, so
+  // the two rails differ and neither changes from one draw to the next.
+  function edgeProfile(shape, h, seed) {
+    var out = [], n = Math.max(2, Math.ceil(h / 2) + 1), state = seed * 2654435761 % 4294967296, o = overhang
+    function rnd() {
+      state = (state + 0x6D2B79F5) | 0
+      var t = Math.imul(state ^ (state >>> 15), 1 | state)
+      t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296
+    }
+    var i, y, v
+    if (shape === "lightning") {
+      // A bolt: long slanted runs out, broken by short sharp snaps back.
+      var knots = [[0, 2]], yy = 0, far = false
+      while (yy < h) {
+        var runLen = 46 + rnd() * 70
+        knots.push([yy + runLen, far ? 1 + rnd() * 3 : o - rnd() * 3])       // the slow slant
+        knots.push([yy + runLen + 5 + rnd() * 5, far ? o * (0.5 + rnd() * 0.3) : o * (0.15 + rnd() * 0.25)])   // the snap
+        yy += runLen + 8; far = !far
+      }
+      var kI = 0
+      for (i = 0; i < n; i++) {
+        y = i * 2
+        while (kI < knots.length - 2 && knots[kI + 1][0] < y) kI++
+        var a = knots[kI], b = knots[kI + 1], f = Math.max(0, Math.min(1, (y - a[0]) / Math.max(1, b[0] - a[0])))
+        out.push(a[1] + (b[1] - a[1]) * f)
+      }
+    } else if (shape === "flame") {
+      // Tongues of different heights, each leaning a little.
+      var tongues = [], ty = 10
+      while (ty < h) { var tw = 22 + rnd() * 34; tongues.push([ty, tw, o * (0.45 + rnd() * 0.55), 0.3 + rnd() * 0.4]); ty += tw * 0.85 }
+      for (i = 0; i < n; i++) {
+        y = i * 2; v = 1.5
+        for (var ti = 0; ti < tongues.length; ti++) {
+          var tg = tongues[ti], u = (y - tg[0]) / tg[1]
+          if (u <= 0 || u >= 1) continue
+          var lean = u < tg[3] ? u / tg[3] : (1 - u) / (1 - tg[3])
+          v = Math.max(v, tg[2] * Math.pow(lean, 1.6))
+        }
+        out.push(v)
+      }
+    } else {
+      var ph = rnd() * 6.283
+      for (i = 0; i < n; i++) {
+        y = i * 2
+        if (shape === "wave") v = o / 2 + (o / 2 - 1) * Math.sin(ph + y / 34)
+        else if (shape === "scallop") v = 1 + (o - 1) * Math.abs(Math.sin(ph + y / 30))
+        else if (shape === "saw") v = 1 + (o - 1) * (((y + ph * 10) % 30) / 30)
+        else v = 0
+        out.push(v)
+      }
+    }
+    for (i = 0; i < n; i++) {                      // ease to nothing at both ends
+      var e = Math.min(1, Math.min(i * 2, h - i * 2) / 38)
+      out[i] = Math.max(0, out[i]) * e * e * (3 - 2 * e)
+    }
+    return out
+  }
+  readonly property real railHeight: Quickshell.screens.length > 0
+    ? Quickshell.screens[0].height - Style.bar.sizeHorizontal - bezel : 0
+  readonly property var profileLeft: shaped ? edgeProfile(edgePref.trim(), railHeight, 17) : []
+  readonly property var profileRight: shaped ? edgeProfile(edgePref.trim(), railHeight, 41) : []
+  function setEdge(v) { edgePref = v; run([home + "/.local/bin/tablet-mode", "edge", v]) }
+
   // `tablet-mode sounds on|off`: a soft tap as a button goes down.
   property string soundsPref: "off"
   property var tapSound: null
@@ -492,6 +567,15 @@ Item {
     onFileChanged: reload()
     onLoaded: root.rotationPref = text()
     onLoadFailed: root.rotationPref = "landscape"
+  }
+
+  FileView {
+    path: root.stateDir + "/edge"
+    watchChanges: true
+    printErrors: false
+    onFileChanged: reload()
+    onLoaded: root.edgePref = text()
+    onLoadFailed: root.edgePref = "straight"
   }
 
   FileView {
@@ -1133,6 +1217,15 @@ Item {
     property real frameRail: 0
     property real frameBar: 0
     property bool frameFlip: false         // the bottom strip: the same outline, upside down
+    // A rail with a shaped side: `profile` is how far that side stands out
+    // every 2 px down (root.edgeProfile), beyond `straight` px of ordinary
+    // rail; `profileSide` is which side it is ("right" for the left rail).
+    // `baseBottom` makes `base` a top-to-bottom gradient, as the rails have.
+    property var profile: []
+    property string profileSide: "right"
+    property real straight: 0
+    property color baseBottom: "transparent"
+    onProfileChanged: requestPaint()
     property color edge: "transparent"     // a line along the frame's inside edge
     property bool shade: true
     property real soft: 0.72               // how strongly decoration is drawn
@@ -1164,8 +1257,17 @@ Item {
       // it as a frame anyway asked for arcs of zero and negative radius, which
       // Canvas refuses ("Incorrect argument radius") and the strip went blank.
       var framed = frameRail > 0 && R > 1
+      var outline = profile && profile.length > 1
       c.beginPath()
-      if (framed && frameFlip) {
+      if (outline) {
+        var onRight = profileSide === "right"
+        if (onRight) { c.moveTo(0, 0); c.lineTo(straight, 0) } else { c.moveTo(w, 0); c.lineTo(w - straight, 0) }
+        for (var oi = 0; oi < profile.length; oi++) {
+          var oyv = Math.min(h, oi * 2)
+          c.lineTo(onRight ? straight + profile[oi] : w - straight - profile[oi], oyv)
+        }
+        if (onRight) { c.lineTo(straight, h); c.lineTo(0, h) } else { c.lineTo(w - straight, h); c.lineTo(w, h) }
+      } else if (framed && frameFlip) {
         c.moveTo(0, h); c.lineTo(w, h); c.lineTo(w, 0); c.lineTo(w - frameRail, 0)
         c.arc(w - frameRail - R, 0, R, 0, Math.PI / 2, false)
         c.lineTo(frameRail + R, R)
@@ -1186,7 +1288,14 @@ Item {
       c.closePath()
       c.save()
       c.clip()
-      if (base.a > 0) { c.fillStyle = base; c.fillRect(0, 0, w, h) }
+      if (base.a > 0) {
+        if (baseBottom.a > 0) {
+          var bgr = c.createLinearGradient(0, 0, 0, h)
+          bgr.addColorStop(0, base); bgr.addColorStop(1, baseBottom)
+          c.fillStyle = bgr
+        } else c.fillStyle = base
+        c.fillRect(0, 0, w, h)
+      }
       // From here on, screen coordinates.
       c.translate(-ox, -oy)
       var X0 = ox, Y0 = oy, X1 = ox + w, Y1 = oy + h
@@ -1534,7 +1643,15 @@ Item {
       }
       c.globalAlpha = 1
       c.translate(ox, oy)
-      if ((framed || flatWash) && shade) {
+      if (outline && shade) {
+        // Across a rail: light on the outside edge, shadow towards the screen.
+        var og = profileSide === "right" ? c.createLinearGradient(0, 0, w, 0) : c.createLinearGradient(w, 0, 0, 0)
+        og.addColorStop(0, "rgba(255,255,255,0.14)")
+        og.addColorStop(0.42, "rgba(255,255,255,0)")
+        og.addColorStop(1, "rgba(0,0,0,0.34)")
+        c.fillStyle = og; c.fillRect(0, 0, w, h)
+      }
+      if (!outline && (framed || flatWash) && shade) {
         // Light from above: a sheen along the top edge, falling to shadow
         // where the frame meets the screen. The rails are shaded the same way
         // across their width, so the whole frame reads as one raised moulding.
@@ -1607,15 +1724,37 @@ Item {
     WlrLayershell.keyboardFocus: WlrKeyboardFocus.None
     exclusiveZone: root.railSize + root.edgeGap
     anchors { right: true; bottom: true; top: !rail.upright; left: rail.upright }
-    implicitWidth: root.railSize + root.edgeGap
+    // Shaped: the window is wider than the space it reserves, by the overhang,
+    // which lies over the windows and passes touches through (the mask).
+    readonly property int over: root.shaped ? root.overhang : 0
+    implicitWidth: root.railSize + root.edgeGap + over
     implicitHeight: root.railSize + root.edgeGap
+    mask: Region { item: railCard }
+
+    ShellPattern {       // the shaped rail: shell, pattern and shading in one outline
+      anchors.fill: parent
+      visible: root.shaped
+      profile: root.shaped ? root.profileRight : []
+      profileSide: "left"
+      straight: root.railSize
+      base: root.skin ? root.skin.shellTop : "transparent"
+      baseBottom: root.skin ? root.skin.shellBottom : "transparent"
+      pattern: root.skin ? root.skin.pattern : "none"
+      seed: 11
+      ox: rail.screen ? rail.screen.width - width : 0
+      oy: Style.bar.sizeHorizontal
+      ink: root.skin ? root.skin.ink : "transparent"
+      glow: root.skin ? root.skin.glow : "transparent"
+      palette: root.skin && root.skin.palette ? root.skin.palette : []
+    }
 
     Rectangle {
+      id: railCard
       anchors.fill: parent
       anchors.rightMargin: root.edgeGap
       anchors.bottomMargin: root.edgeGap
       anchors.topMargin: rail.upright ? 0 : root.edgeGap
-      anchors.leftMargin: rail.upright ? root.edgeGap : 0
+      anchors.leftMargin: (rail.upright ? root.edgeGap : 0) + rail.over
       radius: Style.cornerRadius
       // Controller: square against the screen edges, round towards the windows.
       // Joined to the bar strip above: no corner there, the strip supplies it.
@@ -1623,9 +1762,9 @@ Item {
       topRightRadius: root.controller ? (rail.upright ? root.shellRadius : 0) : radius
       bottomLeftRadius: root.controller ? (rail.upright || root.framed ? 0 : root.shellRadius) : radius
       bottomRightRadius: root.controller ? 0 : radius
-      color: Qt.alpha(Color.popups.background, Color.popups.background.a * root.railOpacity)
+      color: root.shaped ? "transparent" : Qt.alpha(Color.popups.background, Color.popups.background.a * root.railOpacity)
       // Controller look: a moulded shell, lighter than the caps set into it.
-      gradient: root.controller ? shellGradient : null
+      gradient: root.controller && !root.shaped ? shellGradient : null
       // Joined to the bar: no outline of its own (it would draw a line across
       // the join); the frame's inside edge is drawn separately instead.
       border.color: root.controller ? root.frameEdge : Color.popups.border
@@ -1634,7 +1773,7 @@ Item {
       ShellPattern {
         anchors.fill: parent
         anchors.margins: root.framed ? 0 : root.frameEdgeWidth
-        visible: root.skin !== null
+        visible: root.skin !== null && !root.shaped
         pattern: root.skin ? root.skin.pattern : "none"
         seed: 11
         ox: rail.screen ? rail.screen.width - root.railSize : 0
@@ -1647,7 +1786,7 @@ Item {
       }
 
       Rectangle {       // light on the outer edge, shadow towards the screen
-        visible: root.skin !== null
+        visible: root.skin !== null && !root.shaped
         anchors.fill: parent
         topLeftRadius: parent.topLeftRadius; topRightRadius: parent.topRightRadius
         bottomLeftRadius: parent.bottomLeftRadius; bottomRightRadius: parent.bottomRightRadius
@@ -1677,7 +1816,7 @@ Item {
       }
 
       Rectangle {       // the frame's inside edge, down the rail (joined to the bar only)
-        visible: root.framed
+        visible: root.framed && !root.shaped
         x: 0; y: root.frameRadius
         width: root.frameEdgeWidth; height: parent.height - root.frameRadius * 2 - root.bezel
         color: root.frameEdge
@@ -1855,11 +1994,32 @@ Item {
     WlrLayershell.keyboardFocus: WlrKeyboardFocus.None
     exclusiveZone: root.railSize + root.edgeGap
     anchors { left: true; top: true; bottom: true }
-    implicitWidth: root.railSize + root.edgeGap
+    readonly property int over: root.shaped ? root.overhang : 0
+    implicitWidth: root.railSize + root.edgeGap + over
     implicitHeight: root.railSize + root.edgeGap
+    mask: Region { item: railLeftCard }
+
+    ShellPattern {       // the shaped rail: shell, pattern and shading in one outline
+      anchors.fill: parent
+      visible: root.shaped
+      profile: root.shaped ? root.profileLeft : []
+      profileSide: "right"
+      straight: root.railSize
+      base: root.skin ? root.skin.shellTop : "transparent"
+      baseBottom: root.skin ? root.skin.shellBottom : "transparent"
+      pattern: root.skin ? root.skin.pattern : "none"
+      seed: 29
+      ox: 0
+      oy: Style.bar.sizeHorizontal
+      ink: root.skin ? root.skin.ink : "transparent"
+      glow: root.skin ? root.skin.glow : "transparent"
+      palette: root.skin && root.skin.palette ? root.skin.palette : []
+    }
 
     Rectangle {
+      id: railLeftCard
       anchors.fill: parent
+      anchors.rightMargin: railLeft.over
       anchors.leftMargin: root.edgeGap
       anchors.topMargin: root.edgeGap
       anchors.bottomMargin: root.edgeGap
@@ -1868,9 +2028,9 @@ Item {
       bottomRightRadius: root.controller ? (root.framed ? 0 : root.shellRadius) : radius
       topLeftRadius: root.controller ? 0 : radius
       bottomLeftRadius: root.controller ? 0 : radius
-      color: Qt.alpha(Color.popups.background, Color.popups.background.a * root.railOpacity)
+      color: root.shaped ? "transparent" : Qt.alpha(Color.popups.background, Color.popups.background.a * root.railOpacity)
       // Controller look: a moulded shell, lighter than the caps set into it.
-      gradient: root.controller ? shellGradient : null
+      gradient: root.controller && !root.shaped ? shellGradient : null
       // Joined to the bar: no outline of its own (it would draw a line across
       // the join); the frame's inside edge is drawn separately instead.
       border.color: root.controller ? root.frameEdge : Color.popups.border
@@ -1879,7 +2039,7 @@ Item {
       ShellPattern {
         anchors.fill: parent
         anchors.margins: root.framed ? 0 : root.frameEdgeWidth
-        visible: root.skin !== null
+        visible: root.skin !== null && !root.shaped
         pattern: root.skin ? root.skin.pattern : "none"
         seed: 29
         ox: 0
@@ -1892,7 +2052,7 @@ Item {
       }
 
       Rectangle {       // light on the outer edge, shadow towards the screen
-        visible: root.skin !== null
+        visible: root.skin !== null && !root.shaped
         anchors.fill: parent
         topLeftRadius: parent.topLeftRadius; topRightRadius: parent.topRightRadius
         bottomLeftRadius: parent.bottomLeftRadius; bottomRightRadius: parent.bottomRightRadius
@@ -1922,7 +2082,7 @@ Item {
       }
 
       Rectangle {
-        visible: root.framed
+        visible: root.framed && !root.shaped
         x: parent.width - width; y: root.frameRadius
         width: root.frameEdgeWidth; height: parent.height - root.frameRadius * 2 - root.bezel
         color: root.frameEdge
@@ -2203,16 +2363,31 @@ Item {
       onLChanged: requestPaint()
       onTChanged: requestPaint()
       onVisibleChanged: requestPaint()
+      readonly property var shapeKey: root.profileLeft
+      onShapeKeyChanged: requestPaint()
       onPaint: {
         var c = getContext("2d")
         c.reset()
         if (!visible || width < 8) return
+        var pl = root.profileLeft, pr = root.profileRight, shapedNow = root.shaped && pl.length > 1
         function ring(inset, rr) {                 // the recess outline, `inset` px inside it
-          var x0 = l + inset, y0 = t + inset, x1 = r - inset, y1 = b - inset, q = Math.max(0.5, rr - inset)
+          var x0 = l + inset, y0 = t + inset, x1 = r - inset, y1 = b - inset, q = Math.max(0.5, rr - inset), k, yy
           c.beginPath()
           c.moveTo(x0 + q, y0); c.lineTo(x1 - q, y0); c.arcTo(x1, y0, x1, y0 + q, q)
+          if (shapedNow) {                         // down the right rail's shaped side
+            for (k = 0; k < pr.length; k++) {
+              yy = t + k * 2
+              if (yy > y0 + q && yy < y1 - q) c.lineTo(x1 - pr[k], yy)
+            }
+          }
           c.lineTo(x1, y1 - q); c.arcTo(x1, y1, x1 - q, y1, q)
           c.lineTo(x0 + q, y1); c.arcTo(x0, y1, x0, y1 - q, q)
+          if (shapedNow) {                         // and back up the left one
+            for (k = pl.length - 1; k >= 0; k--) {
+              yy = t + k * 2
+              if (yy > y0 + q && yy < y1 - q) c.lineTo(x0 + pl[k], yy)
+            }
+          }
           c.lineTo(x0, y0 + q); c.arcTo(x0, y0, x0 + q, y0, q)
           c.closePath()
         }
@@ -2369,13 +2544,18 @@ Item {
             { key: "rotation", title: "Screen", options: [
                 { v: "landscape", l: "Landscape" }, { v: "portrait", l: "Portrait" },
                 { v: "auto", l: root.canAuto ? "Auto-rotate" : "Auto (no sensor)", off: !root.canAuto }] },
+            { key: "edge", title: "Edge", narrow: true, options: [
+                { v: "straight", l: "Straight" }, { v: "lightning", l: "Lightning" }, { v: "wave", l: "Wave" },
+                { v: "scallop", l: "Scallop" }, { v: "flame", l: "Flame" }, { v: "saw", l: "Saw" }] },
             { key: "rails", title: "Rails", options: [{ v: "both", l: "Both sides" }, { v: "right", l: "Right only" }] },
             { key: "sounds", title: "Button sounds", options: [{ v: "on", l: "On" }, { v: "off", l: "Off" }] }
           ]
           RowLayout {
             id: sw2
             required property var modelData
-            readonly property string current: modelData.key === "rotation" ? root.rotationPref.trim()
+            readonly property string current: modelData.key === "edge"
+              ? (root.edgeNames.indexOf(root.edgePref.trim()) >= 0 ? root.edgePref.trim() : "straight")
+              : modelData.key === "rotation" ? root.rotationPref.trim()
               : (modelData.key === "rails" ? (root.railsPref.trim() === "right" ? "right" : "both")
                                            : (root.soundsPref.trim() === "on" ? "on" : "off"))
             Layout.fillWidth: true
@@ -2387,7 +2567,7 @@ Item {
                 required property var modelData
                 readonly property bool on: sw2.current === modelData.v
                 readonly property bool off: !!modelData.off
-                implicitWidth: 126; implicitHeight: 38; radius: 19
+                implicitWidth: sw2.modelData.narrow ? 88 : 126; implicitHeight: 38; radius: 19
                 color: on ? Color.accent : Qt.alpha(Color.popups.text, 0.08)
                 border.width: on ? 0 : 1
                 border.color: Qt.alpha(Color.popups.text, 0.2)
@@ -2398,7 +2578,8 @@ Item {
                   anchors.fill: parent
                   enabled: !parent.off
                   onClicked: {
-                    if (sw2.modelData.key === "rotation") root.setRotation(parent.modelData.v)
+                    if (sw2.modelData.key === "edge") root.setEdge(parent.modelData.v)
+                    else if (sw2.modelData.key === "rotation") root.setRotation(parent.modelData.v)
                     else if (sw2.modelData.key === "rails") root.setRails(parent.modelData.v)
                     else root.setSounds(parent.modelData.v)
                   }

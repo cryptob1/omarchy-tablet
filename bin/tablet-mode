@@ -27,6 +27,9 @@ Reactions:
                                      stay put; auto follows the tablet's orientation
                                      sensor, where it has one (needs iio-sensor-proxy)
     tablet-mode rotate toggle|flip   swap landscape and portrait; turn upside down
+    tablet-mode edge <shape>         the shape of the rails' inside edges, with a
+                                     controller look: straight, lightning, wave,
+                                     scallop, flame, saw
     tablet-mode sounds on|off        a soft tap as a rail button goes down
     tablet-mode dictation on|off     show the mic button at all (needs a dictation
                                      backend: see `tablet-touch` DICTATION)
@@ -316,6 +319,8 @@ def main():
         write(os.path.join(STATE_DIR, "rails"), cmd[1])
     elif cmd[0] == "look" and len(cmd) == 2 and cmd[1] in LOOKS:
         write(os.path.join(STATE_DIR, "look"), cmd[1])
+    elif cmd[0] == "edge" and len(cmd) == 2 and cmd[1] in ("straight", "lightning", "wave", "scallop", "flame", "saw"):
+        write(os.path.join(STATE_DIR, "edge"), cmd[1])
     elif cmd[0] == "sounds" and len(cmd) == 2 and cmd[1] in ("on", "off"):
         write(os.path.join(STATE_DIR, "sounds"), cmd[1])
     elif cmd[0] == "bar-colors" and len(cmd) == 2:
