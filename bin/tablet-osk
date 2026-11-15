@@ -34,23 +34,40 @@ show() {
 hide() { pkill -x "$bin" 2>/dev/null || true; }
 locked() { [ "$(omarchy-shell lock isLocked 2>/dev/null)" = "true" ]; }
 LOCK_IDLE=45
+# On the lock screen: the split thumb keyboard (shell plugin tablet.rail, which
+# shows it while this file says 1) unless the full-width one is preferred or
+# the plugin's surface does not come up, in which case wvkbd as before. A
+# locked tablet must never be left without a keyboard.
+state="${XDG_STATE_HOME:-$HOME/.local/state}/tablet-mode"
+lock_show() {
+  if [ "$(cat "$state/keyboard" 2>/dev/null)" != "full" ]; then
+    mkdir -p "$state"; echo 1 > "$state/lock-keyboard"
+    for _ in 1 2 3 4 5 6 7 8; do
+      hyprctl layers 2>/dev/null | grep -q "namespace: omarchy-tablet-keys" && return 0
+      sleep 0.25
+    done
+    echo 0 > "$state/lock-keyboard"
+  fi
+  show
+}
+lock_hide() { [ -e "$state/lock-keyboard" ] && echo 0 > "$state/lock-keyboard"; hide; }
 lock_watch() {
   locked || return 0
   local dir="${XDG_RUNTIME_DIR:-/tmp}/tablet-mode" now mark
   mkdir -p "$dir"
   exec 9>"$dir/lock-osk.lock"
   flock -n 9 || return 0          # one watcher at a time
-  show
+  lock_show
   while locked; do
     sleep 1
     now=$(date +%s)
     mark=$(stat -c %Y "$dir/touch" 2>/dev/null || echo "$now")
     if [ $((now - mark)) -ge "$LOCK_IDLE" ]; then
-      hide
+      lock_hide
       return 0                    # the next touch starts a new watch
     fi
   done
-  hide
+  lock_hide
 }
 case "${1:-toggle}" in
   show) show ;;

@@ -266,7 +266,7 @@ Item {
   // U of thick sides and a thin top reads as three strips, a closed ring reads
   // as one object with the screen set into it. It costs the windows this much
   // height; it is as tall as it is to carry the load meters.
-  readonly property int bezel: keysShown ? 48 : 12
+  readonly property int bezel: (keysShown || pagerOn) ? 48 : 12
 
   // THE KEY STRIP. Without a keyboard, the keys an app needs all the time are
   // a whole on-screen keyboard away. So the bottom bezel grows a row of them,
@@ -295,15 +295,32 @@ Item {
     if (!(barSkinned && !upright && slide === 1) || want === "off") return false
     return want === "always" || keyContext !== ""
   }
+  // THE PAGER. The desktops, as numbered keys at the left end of the bottom
+  // band: tap one to go there, hold one to take the focused window there. The
+  // one you are on is lit, empty ones are faint. While the band is up the
+  // rails carry no desktop arrows, which were easy to mistake for Back.
+  readonly property bool pagerOn: barSkinned && !upright
+  readonly property int deskNow: Hyprland.focusedWorkspace !== null ? Hyprland.focusedWorkspace.id : 1
+  readonly property var deskUsed: {
+    var ids = [], ws = Hyprland.workspaces.values
+    for (var i = 0; i < ws.length; i++) if (ws[i].id > 0) ids.push(ws[i].id)
+    return ids
+  }
+  readonly property int deskCount: {
+    var top = Math.max(5, deskNow)
+    for (var i = 0; i < deskUsed.length; i++) top = Math.max(top, deskUsed[i])
+    return Math.min(top, 7)
+  }
   readonly property var keySets: ({
     terminal: [
       { l: "Esc", k: [1] }, { l: "Tab", k: [15] }, { l: "\u21e7Tab", k: [42, 15] }, { l: "Ctrl C", k: [29, 46] },
       { l: "\u2190", k: [105], r: true }, { l: "\u2191", k: [103], r: true }, { l: "\u2193", k: [108], r: true }, { l: "\u2192", k: [106], r: true },
-      { l: "1", k: [2] }, { l: "2", k: [3] }, { l: "3", k: [4] }, { l: "/", k: [53] }
+      { l: "1", k: [2] }, { l: "2", k: [3] }, { l: "3", k: [4] }, { l: "/", k: [53] }, { l: "\u232b", k: [14], r: true }
     ],
     browser: [
-      { l: "\u2039 Tab", k: [29, 42, 15] }, { l: "Tab \u203a", k: [29, 15] }, { l: "New tab", k: [29, 20] },
-      { l: "Close tab", k: [29, 17] }, { l: "Reopen", k: [29, 42, 20] }, { l: "Reload", k: [29, 19] },
+      { l: "Forward", k: [56, 106] }, { l: "Reload", k: [29, 19] },
+      { l: "Prev tab", k: [29, 42, 15] }, { l: "Next tab", k: [29, 15] }, { l: "New tab", k: [29, 20] },
+      { l: "Close tab", k: [29, 17] }, { l: "Reopen", k: [29, 42, 20] },
       { l: "Address", k: [29, 38] }, { l: "Find", k: [29, 33] }, { l: "A\u2212", k: [29, 12] }, { l: "A+", k: [29, 13] }
     ]
   })
@@ -337,6 +354,10 @@ Item {
   // (which the lock screen always uses; hold the rail's keyboard button for it).
   property string keyboardPref: "split"
   property bool kbOpen: false
+  // On the lock screen: bin/tablet-osk raises it there (the state file below)
+  // when a locked tablet is touched, and the Hyprland fragment lets this
+  // surface sit above the lock and take touches.
+  property bool kbLock: false
   property bool kbShift: false                     // for the next letter only
   property bool kbCaps: false                      // until tapped again (tap Shift twice)
   property bool kbCtrl: false                      // for the next key only
@@ -395,6 +416,14 @@ Item {
     run([home + "/.local/bin/tablet-mode", "keyboard", v])
   }
   onNoKeyboardChanged: if (!noKeyboard) kbOpen = false        // the real keyboard is back
+  FileView {
+    path: root.stateDir + "/lock-keyboard"
+    watchChanges: true
+    printErrors: false
+    onFileChanged: reload()
+    onLoaded: root.kbLock = text().trim() === "1"
+    onLoadFailed: root.kbLock = false
+  }
   FileView {
     path: root.stateDir + "/keyboard"
     watchChanges: true
@@ -1384,7 +1413,10 @@ Item {
     property real tall: 34
     property bool lit: false               // a modifier that is held on (Shift, Ctrl)
     property int labelSize: 13
+    property bool faint: false             // a place with nothing in it: the legend steps back
+    property int holdMs: 0                 // > 0: hit() on lifting, held() after this long down
     signal hit()
+    signal held()
     signal pressedDown()
     readonly property color base: lit ? (skin ? skin.accent : Color.accent) : (skin ? skin.cap : Color.popups.background)
     function inkOn(c) { return (c.r * 0.299 + c.g * 0.587 + c.b * 0.114) > 0.6 ? "#1b1c22" : "#ffffff" }
@@ -1417,15 +1449,22 @@ Item {
       color: kc.lit ? kc.inkOn(kc.base) : (kc.skin ? kc.skin.legend : Color.popups.text)
       font.pixelSize: kc.labelSize
       font.bold: true
+      opacity: kc.faint && !kc.lit ? 0.4 : 1.0
     }
     MouseArea {
       id: kcArea
+      property bool spent: false
       anchors.fill: parent
       anchors.margins: -4
-      onPressed: { kc.pressedDown(); kc.hit(); if (kc.repeats) { kcAgain.interval = 380; kcAgain.start() } }
-      onReleased: kcAgain.stop()
-      onCanceled: kcAgain.stop()
+      onPressed: {
+        kc.pressedDown()
+        if (kc.holdMs > 0) { spent = false; kcHold.restart(); return }
+        kc.hit(); if (kc.repeats) { kcAgain.interval = 380; kcAgain.start() }
+      }
+      onReleased: { kcAgain.stop(); if (kc.holdMs > 0) { kcHold.stop(); if (!spent && containsMouse) kc.hit() } }
+      onCanceled: { kcAgain.stop(); kcHold.stop() }
     }
+    Timer { id: kcHold; interval: kc.holdMs; onTriggered: { kcArea.spent = true; kc.held() } }
     Timer { id: kcAgain; repeat: true; onTriggered: { interval = 70; kc.hit() } }
   }
 
@@ -2346,6 +2385,7 @@ Item {
 
         Rectangle {
           Layout.alignment: Qt.AlignCenter
+          visible: !root.pagerOn
           implicitWidth: 30; implicitHeight: 22
           radius: 22 * root.corner
           // On a skin the number sits on a chip of cap colour: a bare number
@@ -2408,7 +2448,7 @@ Item {
 
           onPressedDown: root.click()
           Layout.alignment: Qt.AlignCenter
-          visible: !root.dual      // two rails: this arrow is on the left one
+          visible: !root.dual && !root.pagerOn     // two rails: this arrow is on the left one
           glyph: "󰁍"
           heldGlyph: "󰖯"
           holdMs: root.carryMs
@@ -2423,6 +2463,7 @@ Item {
           Layout.alignment: Qt.AlignCenter
           glyph: "󰁔"
           heldGlyph: "󰖯"
+          visible: !root.pagerOn
           holdMs: root.carryMs
           onTapped: root.wsTapped("r+1")
           onHeld: root.wsHeld("r+1")
@@ -2716,6 +2757,7 @@ Item {
           corner: root.corner
           onPressedDown: root.click()
           Layout.alignment: Qt.AlignCenter
+          visible: !root.pagerOn
           glyph: "󰁍"
           heldGlyph: "󰖯"
           holdMs: root.carryMs
@@ -2874,7 +2916,7 @@ Item {
     exclusiveZone: root.slide > 0 ? root.bezel : 0
     anchors { bottom: true; left: true; right: true }
     implicitHeight: root.bezel + root.frameRadius
-    mask: Region { item: keyRow }                  // only the keys take a touch
+    mask: Region { item: keyRow; Region { item: pagerRow } }   // only the keys take a touch
 
     ShellPattern {
       id: bezelPattern
@@ -2900,11 +2942,38 @@ Item {
 
     // The key strip (see THE KEY STRIP), in the middle of the band.
     Row {
+      id: pagerRow
+      visible: root.pagerOn
+      x: root.railSize + 18
+      y: root.frameRadius + (root.bezel - 34) / 2
+      spacing: 6
+      Repeater {
+        model: root.pagerOn ? root.deskCount : 0
+        KeyCap {
+          required property int index
+          skin: root.skin
+          corner: root.corner
+          wide: 38
+          label: index + 1
+          labelSize: 14
+          lit: root.deskNow === index + 1
+          faint: root.deskUsed.indexOf(index + 1) < 0
+          holdMs: root.carryMs
+          onPressedDown: root.click()
+          onHit: root.wsTapped(index + 1)
+          onHeld: root.wsHeld(index + 1)
+        }
+      }
+    }
+    Row {
       id: keyRow
       visible: root.keysShown
-      anchors.horizontalCenter: parent.horizontalCenter
+      // Centred in what the pager and the meters leave.
+      readonly property real from: root.pagerOn ? pagerRow.x + pagerRow.width + 14 : root.railSize
+      readonly property real to: parent.width - root.railSize - (root.pagerOn ? 3 * 74 + 20 : 0)
+      x: Math.max(from, from + (to - from - width) / 2)
       y: root.frameRadius + (root.bezel - 34) / 2
-      spacing: 9
+      spacing: root.keySet.length > 10 ? 7 : 9
       Repeater {
         model: root.keysShown ? root.keySet : []
         KeyCap {
@@ -2934,9 +3003,10 @@ Item {
                                          : (root.skin ? root.skin.accent : Color.accent)
         readonly property real room: parent.width - 2 * root.railSize - 60
         readonly property real span: (room - 2 * 30) / 3
-        readonly property bool compact: root.keysShown
+        readonly property bool compact: root.keysShown || root.pagerOn
         visible: root.barSkinned && !root.upright && load >= 0
-        x: compact ? (index === 2 ? parent.width - root.railSize - 24 - tag.width : root.railSize + 24 + index * 84)
+        x: compact ? (root.pagerOn ? parent.width - root.railSize - 16 - (3 - index) * 74
+                                   : (index === 2 ? parent.width - root.railSize - 24 - tag.width : root.railSize + 24 + index * 84))
                    : root.railSize + 30 + index * (span + 30)
         y: root.frameRadius
         width: compact ? tag.width : span; height: root.bezel
@@ -3110,7 +3180,7 @@ Item {
   // ------------------------------------------------------- thumb keyboard
   PanelWindow {
     id: kbWin
-    visible: root.kbOpen && root.noKeyboard
+    visible: (root.kbOpen || root.kbLock) && root.noKeyboard
     screen: Quickshell.screens.length > 0 ? Quickshell.screens[0] : null
     color: "transparent"
     // Named for bin/tablet-gestures (which leaves touches on it alone) and for

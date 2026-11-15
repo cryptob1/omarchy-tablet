@@ -15,6 +15,7 @@ end
 -- keyboard detached cannot be unlocked. 2 = drawn above the lock screen AND
 -- allowed to take touches there. Only wvkbd: it types, it shows nothing.
 hl.layer_rule({ name = "tablet-osk-above-lock", match = { namespace = "wvkbd" }, above_lock = 2 })
+hl.layer_rule({ name = "tablet-keys-above-lock", match = { namespace = "^omarchy-tablet-keys$" }, above_lock = 2 })
 
 -- ...and above every other Overlay surface, so a key press reaches the
 -- keyboard and not a shell panel's "touch outside to close" area (see
