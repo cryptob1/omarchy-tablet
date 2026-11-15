@@ -18,8 +18,8 @@ A rail on each edge of the screen, shown while the machine is in tablet mode. Wi
 | Maximise | Fills the screen with the focused window, or restores it. The bar and rails stay. |
 | Scroll strip | Drag along it to scroll the focused window. Let go while moving and it keeps going. |
 | Switch | Focuses the next window on the workspace. If the current one fills the screen, the next takes its place. |
-| ‹ n › | Previous / next workspace, with the current number. Hold an arrow to take the focused window along. |
 | Keyboard | Shows or hides the on-screen keyboard. |
+| n › | The current workspace number, and next workspace. Hold the arrow to take the focused window along. |
 | Enter | Sends Enter to the focused app. |
 | Mic | Push-to-talk for a dictation tool. Only shown if you have one set up (see [Dictation](#dictation)). |
 
@@ -27,17 +27,39 @@ A rail on each edge of the screen, shown while the machine is in tablet mode. Wi
 
 | Button | Does |
 |---|---|
+| Settings | Opens the settings panel: look, one rail or two, button sounds. |
 | Stay awake | While lit: no screensaver, no auto-lock, no screen-off. Same state as the bar's mug indicator. |
 | Brightness | A rocker: plus at the top, minus at the bottom, hold to keep going. It fills from the bottom to show the current level. |
 | Volume | The same rocker for volume; tap the speaker in the middle to mute. Uses Omarchy's own commands, so its on-screen display shows too. |
+| ‹ | Previous workspace, level with "next" on the right rail, so each direction is under its own thumb. Hold to take the focused window along. |
 | Play / pause | Hold for the next track. |
 | Launcher | Opens the app menu. |
 
-`tablet-mode rails right` puts everything except the media and volume buttons on a single right-hand rail; `tablet-mode rails both` brings the second one back. An upright screen always gets the single rail, along the bottom edge.
+`tablet-mode rails right` puts everything except the media, volume and brightness controls on a single right-hand rail (hold Stay awake there for the settings panel); `tablet-mode rails both` brings the second one back. An upright screen always gets the single rail, along the bottom edge.
 
-The rails follow your theme: the shell's colours, corner radius, border and gaps.
+### Looks
 
-**Two looks.** `tablet-mode look controller` draws the rails like a handheld game controller: a moulded shell a shade lighter than your background, the buttons as raised caps that sink when pressed, the scroll strip as a ridged thumb wheel. `tablet-mode look theme` goes back to the flat Omarchy look. Both take their colours from the theme.
+<img src="docs/looks.png" alt="The ten controller looks" width="520">
+
+By default the rails are drawn like every other Omarchy surface: your theme's colours, corner radius, border and gaps. Or pick a controller look, where the rails become a moulded shell flush with the screen edges, the buttons raised caps that sink when pressed, and the scroll strip a ridged thumb wheel:
+
+| Look | |
+|---|---|
+| `theme` | Plain Omarchy (the default). |
+| `controller` | A slate shell in your theme's colours. |
+| `cheetah` | Your theme's accent colour, covered in cheetah spots. |
+| `tiger` | Orange with black stripes. |
+| `arcade` | Black with confetti and yellow buttons. |
+| `neon` | Purple with a pink grid and cyan legends. |
+| `retro` | Ridged grey plastic with red buttons. |
+| `candy` | Pink polka dots, white caps. |
+| `lava` | Black and red with glowing embers. |
+| `galaxy` | Deep blue to violet, with stars. |
+| `ice` | Pale blue and white. |
+
+Choose one in the settings panel (the cog at the top of the left rail), or with `tablet-mode look <name>`.
+
+**Button sounds.** `tablet-mode sounds on` (or the settings panel) plays a soft tap as a button goes down. Off by default. The mic never makes one: it would be the first thing your dictation hears.
 
 ### Gestures
 

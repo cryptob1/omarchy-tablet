@@ -4,22 +4,26 @@
 // TWO RAILS (the default, `tablet-mode rails both`): held in both hands, a big
 // tablet has a thumb on each edge, and the lower a button is the easier it is
 // to reach. So the buttons are split by hand and ordered bottom-up by use:
-//   right, bottom up   mic, enter, keyboard, next / previous workspace,
-//                      switch window, the scroll strip, maximise, and close
-//                      at the top
-//   left, bottom up    launcher, play-pause (hold: next track), a volume
+//   right, bottom up   mic, enter, NEXT workspace (with the number above
+//                      it), keyboard, switch window, the scroll strip,
+//                      maximise, and close at the top
+//   left, bottom up    launcher, play-pause (hold: next track), PREVIOUS
+//                      workspace level with "next" on the right, a volume
 //                      rocker and a brightness rocker (plus / minus, hold to
 //                      repeat, filled to show the level; tap the speaker to
 //                      mute), and stay awake at the top
 // `tablet-mode rails right`, or an upright screen, gives the single rail
 // described below, which has no media or volume buttons.
 //
-// TWO LOOKS (`tablet-mode look theme|controller`). "theme" draws the rails like
-// every other Omarchy surface. "controller" draws them like a handheld game
-// controller: a moulded shell a shade lighter than the theme's background,
-// with the buttons as raised caps that sink when pressed, the scroll strip as
-// a ridged thumb wheel, and the close legend in red. Colours still come from
-// the theme, so it changes with it.
+// THREE LOOKS (`tablet-mode look theme|controller|cheetah`). "theme" draws the
+// rails like every other Omarchy surface. "controller" draws them like a
+// handheld game controller: a moulded shell a shade lighter than the theme's
+// background, flush with the screen edges and rounded only towards the
+// windows, with the buttons as raised caps that sink when pressed, the scroll
+// strip as a ridged thumb wheel, and the close legend in red. "cheetah" is the
+// controller with a shell in the theme's accent colour, covered in darker
+// cheetah spots. Colours always come from the theme, so the looks change
+// with it.
 //
 // THE RAIL. While ~/.local/state/tablet-mode/state reads "tablet" (written by
 // bin/tablet-mode on keyboard detach) a strip RAIL px wide is reserved along
@@ -88,10 +92,85 @@ Item {
   readonly property string stateDir: home + "/.local/state/tablet-mode"
   property string mode: "laptop"
   property string micPref: "auto"
-  // `tablet-mode look theme|controller`: drawn like the rest of Omarchy, or
-  // like a handheld game controller (a moulded shell with raised button caps).
+  // `tablet-mode look theme|controller|cheetah`: drawn like the rest of
+  // Omarchy, or like a handheld game controller (a moulded shell with raised
+  // button caps), or that controller with a blue cheetah-spot shell.
   property string lookPref: "theme"
-  readonly property bool controller: lookPref.trim() === "controller"
+  // Every look but "theme" is a SKIN: the colours of a controller shell, its
+  // button caps and their legends, and a pattern across the shell. Two take
+  // their colours from the Omarchy theme; the rest are fixed, loud and
+  // unapologetic. `skin` is null for the flat theme look.
+  readonly property var lookNames: ["theme", "controller", "cheetah", "tiger", "arcade", "neon",
+                                    "retro", "candy", "lava", "galaxy", "ice"]
+  function skinFor(name) {
+    var bg = Color.popups.background, ac = Color.accent
+    switch (name) {
+    case "controller": return {
+        label: "Controller", shellTop: Qt.lighter(bg, 2.2), shellBottom: Qt.lighter(bg, 1.45),
+        cap: Qt.darker(bg, 1.25), legend: Color.popups.text, accent: ac, close: Color.urgent,
+        pattern: "none", ink: "transparent", glow: "transparent" }
+    case "cheetah": return {
+        label: "Cheetah", shellTop: Qt.tint(Qt.lighter(bg, 2.4), Qt.alpha(ac, 0.55)),
+        shellBottom: Qt.tint(Qt.lighter(bg, 1.7), Qt.alpha(ac, 0.38)),
+        cap: Qt.darker(bg, 1.25), legend: Color.popups.text, accent: ac, close: Color.urgent,
+        pattern: "spots", ink: Qt.alpha(Qt.darker(ac, 3.4), 0.62), glow: Qt.alpha(Qt.lighter(ac, 1.5), 0.55) }
+    case "tiger": return {
+        label: "Tiger", shellTop: "#f7a02b", shellBottom: "#d8660a", cap: "#1c130d", legend: "#ffe7c2",
+        accent: "#ffd23f", close: "#ff5a4d", pattern: "stripes", ink: "#d91a0f08", glow: "transparent" }
+    case "arcade": return {
+        label: "Arcade", shellTop: "#2d2f3d", shellBottom: "#14151c", cap: "#0b0c11", legend: "#f4f4f4",
+        accent: "#ffcc00", close: "#ff3b3b", pattern: "confetti", ink: "#ff3b3b", glow: "#2ec4ff" }
+    case "neon": return {
+        label: "Neon", shellTop: "#2c1052", shellBottom: "#110423", cap: "#0d0420", legend: "#3ef0ff",
+        accent: "#ff2fd0", close: "#ff4f7a", pattern: "grid", ink: "#59ff2fd0", glow: "#803ef0ff" }
+    case "retro": return {
+        label: "Retro", shellTop: "#dcd9d2", shellBottom: "#b8b4aa", cap: "#3a393e", legend: "#f3f1ea",
+        accent: "#c8102e", close: "#ff6b6b", pattern: "ridges", ink: "#1f000000", glow: "#40ffffff" }
+    case "candy": return {
+        label: "Candy", shellTop: "#ff9ecf", shellBottom: "#ffc48a", cap: "#fff6fb", legend: "#d6336c",
+        accent: "#7c4dff", close: "#e03131", pattern: "dots", ink: "#8cffffff", glow: "transparent" }
+    case "lava": return {
+        label: "Lava", shellTop: "#3c0e05", shellBottom: "#130302", cap: "#1b0806", legend: "#ffb36b",
+        accent: "#ff5a1f", close: "#ff3b30", pattern: "spots", ink: "#99ff4d0a", glow: "#e6ffd166" }
+    case "galaxy": return {
+        label: "Galaxy", shellTop: "#1a1f63", shellBottom: "#3d1569", cap: "#0e0f2e", legend: "#dcd6ff",
+        accent: "#9d7bff", close: "#ff6b9a", pattern: "stars", ink: "#ffffff", glow: "#b3c8b6ff" }
+    case "ice": return {
+        label: "Ice", shellTop: "#eaf8ff", shellBottom: "#bfe4f6", cap: "#f8fdff", legend: "#1f6f96",
+        accent: "#18a0e0", close: "#e5484d", pattern: "stars", ink: "#ffffff", glow: "#997cc4e8" }
+    }
+    return null
+  }
+  function lookLabel(name) { var k = skinFor(name); return k ? k.label : "Omarchy" }
+  readonly property var skin: skinFor(lookPref.trim())
+
+  // The settings panel (the cog at the top of the left rail; with one rail,
+  // hold the stay-awake button). Choices go through `tablet-mode`, which
+  // writes the state files this plugin watches, so the command line and the
+  // panel can never disagree; the property is also set at once so the change
+  // shows without waiting for the file.
+  property bool settingsOpen: false
+  function setLook(name) { lookPref = name; run([home + "/.local/bin/tablet-mode", "look", name]) }
+  function setRails(v) { railsPref = v; run([home + "/.local/bin/tablet-mode", "rails", v]) }
+  function setSounds(v) { soundsPref = v; run([home + "/.local/bin/tablet-mode", "sounds", v]); click() }
+  readonly property bool controller: skin !== null
+  // `tablet-mode sounds on|off`: a soft tap as a button goes down.
+  property string soundsPref: "off"
+  property var tapSound: null
+  readonly property string tapFile: home + "/.local/share/omarchy-tablet/tap.wav"
+  // QtMultimedia plays it with no start-up lag; it is optional in Qt, so it is
+  // loaded at run time and pw-play stands in where it is missing.
+  Component.onCompleted: {
+    try {
+      tapSound = Qt.createQmlObject('import QtMultimedia; SoundEffect { volume: 0.35 }', root, "tapSound")
+      tapSound.source = "file://" + tapFile
+    } catch (e) { tapSound = null }
+  }
+  function click() {
+    if (soundsPref.trim() !== "on") return
+    if (tapSound) tapSound.play()
+    else Quickshell.execDetached(["pw-play", "--volume", "0.35", tapFile])
+  }
   // `tablet-mode rails both|right`: a rail on each edge, or one on the right.
   property string railsPref: "both"
   property string cortexState: "idle"   // the dictation backend's state
@@ -277,6 +356,15 @@ Item {
   }
 
   FileView {
+    path: root.stateDir + "/sounds"
+    watchChanges: true
+    printErrors: false
+    onFileChanged: reload()
+    onLoaded: root.soundsPref = text()
+    onLoadFailed: root.soundsPref = "off"
+  }
+
+  FileView {
     path: root.stateDir + "/rails"
     watchChanges: true
     printErrors: false
@@ -348,13 +436,20 @@ Item {
     // Controller look: a raised cap (sheen on top, shade below, a shadow under
     // it) that sinks when pressed. `legend` colours the glyph, as the printed
     // legends on a pad's buttons are coloured.
-    property bool cap: false
-    property color legend: Color.popups.text
+    property var skin: null            // root.skin, or null for the flat look
+    readonly property bool cap: skin !== null
+    property bool danger: false        // its legend is the skin's warning colour (close)
+    // The colour it turns when active: the skin's accent, unless the button
+    // was given one of its own (close's red).
+    readonly property color onColor: skin && Qt.colorEqual(activeColor, Color.accent) ? skin.accent : activeColor
+    // Dark ink on a light cap, light ink on a dark one.
+    function inkOn(c) { return (c.r * 0.299 + c.g * 0.587 + c.b * 0.114) > 0.6 ? "#1b1c22" : "#ffffff" }
     signal tapped()
     signal held()
+    signal pressedDown()               // the finger landed (for the tap sound)
 
     readonly property bool lit: active || area.pressed
-    readonly property color capBase: active ? activeColor : Qt.darker(Color.popups.background, 1.25)
+    readonly property color capBase: active ? onColor : (skin ? skin.cap : Color.popups.background)
     property real fill: lit ? 0.95 : see
     Behavior on fill { NumberAnimation { duration: 120 } }
     implicitWidth: size; implicitHeight: size
@@ -393,7 +488,8 @@ Item {
     Text {
       anchors.centerIn: parent
       text: b.holding && b.heldGlyph.length > 0 ? b.heldGlyph : b.glyph
-      color: b.cap ? (b.active ? Color.background : b.legend) : (b.lit ? Color.background : Color.popups.text)
+      color: b.cap ? (b.active ? b.inkOn(b.onColor) : (b.danger ? b.skin.close : b.skin.legend))
+                   : (b.lit ? Color.background : Color.popups.text)
       font.pixelSize: b.glyphSize
       font.bold: b.boldGlyph
       style: Text.Outline
@@ -404,7 +500,7 @@ Item {
       id: area
       anchors.fill: parent
       pressAndHoldInterval: b.holdMs > 0 ? b.holdMs : 800
-      onPressed: if (b.repeatMs > 0) { b.tapped(); again.interval = 380; again.start() }
+      onPressed: { b.pressedDown(); if (b.repeatMs > 0) { b.tapped(); again.interval = 380; again.start() } }
       onPressAndHold: if (b.holdMs > 0) { b.holding = true; b.held() }
       onClicked: (mouse) => { if (b.repeatMs === 0 && !(b.holdMs > 0 && mouse.wasHeld)) b.tapped() }
       onReleased: { b.holding = false; again.stop() }
@@ -431,10 +527,12 @@ Item {
     // Rail: the one button filled with the accent colour while idle, so the
     // eye finds it first. Red while listening, pulsing while transcribing.
     property bool prominent: false
-    property bool cap: false           // controller look, see TouchButton
+    property var skin: null            // see TouchButton
+    readonly property bool cap: skin !== null
     signal down()
     signal up()
-    readonly property color capBase: listening ? Color.urgent : Color.accent
+    readonly property color capBase: listening ? Color.urgent : (skin ? skin.accent : Color.accent)
+    function inkOn(c) { return (c.r * 0.299 + c.g * 0.587 + c.b * 0.114) > 0.6 ? "#1b1c22" : "#ffffff" }
 
     readonly property bool solid: listening || busy || prominent
     property real fill: (area.pressed || solid) ? 0.95 : see
@@ -495,10 +593,10 @@ Item {
     Text {
       anchors.centerIn: parent
       text: m.busy ? "󰔟" : "󰍬"
-      color: m.solid ? Color.background : Color.popups.text
+      color: m.cap ? m.inkOn(m.capBase) : (m.solid ? Color.background : Color.popups.text)
       font.pixelSize: Math.round(m.size * 0.44)
       style: Text.Outline
-      styleColor: m.fill > 0.9 ? "transparent" : Color.popups.background
+      styleColor: (m.cap || m.fill > 0.9) ? "transparent" : Color.popups.background
     }
 
     MouseArea {
@@ -529,7 +627,9 @@ Item {
     property real flingStop: 3
     property real flingTau: 0.33    // s
     // Controller look: an inset, ridged thumb wheel.
-    property bool cap: false
+    property var skin: null            // see TouchButton
+    readonly property bool cap: skin !== null
+    readonly property color mark: skin ? skin.legend : Color.popups.text
     signal aim()
     signal wheel(int notches)
 
@@ -547,7 +647,7 @@ Item {
 
     implicitWidth: 50; implicitHeight: 50
     radius: 16
-    color: cap ? Qt.darker(Color.popups.background, area.pressed || fling.running ? 1.15 : 1.5)
+    color: cap ? Qt.darker(skin.cap, area.pressed || fling.running ? 1.0 : 1.22)
                : Qt.alpha(Color.popups.text, area.pressed || fling.running ? 0.16 : 0.07)
     border.width: cap ? 1.5 : 0
     border.color: Qt.alpha("black", 0.6)
@@ -561,7 +661,7 @@ Item {
       anchors.margins: 6
       rotation: st.horizontal ? -90 : 0
       text: "󰅃"
-      color: Color.popups.text
+      color: st.mark
       opacity: 0.55
       font.pixelSize: 20
     }
@@ -571,7 +671,7 @@ Item {
       rotation: st.horizontal ? 90 : 0
       Repeater {
         model: st.cap ? 9 : 3
-        Rectangle { width: st.cap ? 30 : 22; height: 2; radius: 1; color: Qt.alpha(Color.popups.text, st.cap ? 0.28 : 0.45) }
+        Rectangle { width: st.cap ? 30 : 22; height: 2; radius: 1; color: Qt.alpha(st.mark, st.cap ? 0.34 : 0.45) }
       }
     }
     Text {
@@ -582,7 +682,7 @@ Item {
       anchors.margins: 6
       rotation: st.horizontal ? -90 : 0
       text: "󰅀"
-      color: Color.popups.text
+      color: st.mark
       opacity: 0.55
       font.pixelSize: 20
     }
@@ -631,15 +731,19 @@ Item {
     property real level: -1            // 0-1, or -1 when unknown
     property bool off: false           // muted: the fill goes grey
     property int repeatMs: 110
-    property bool cap: false           // controller look, see TouchButton
-    readonly property color body: cap ? Qt.darker(Color.popups.background, 1.25) : Color.popups.background
+    property var skin: null            // see TouchButton
+    readonly property bool cap: skin !== null
+    readonly property color body: skin ? skin.cap : Color.popups.background
+    readonly property color mark: skin ? skin.legend : Color.popups.text
+    readonly property color hot: skin ? skin.accent : Color.accent
     signal up()
     signal down()
     signal middle()
+    signal pressedDown()
 
     readonly property real shown: level < 0 ? 0 : Math.max(0, Math.min(1, level))
     readonly property color fillColor: Qt.tint(body,
-      Qt.alpha(off ? Color.popups.text : Color.accent, off ? 0.16 : 0.34))
+      Qt.alpha(off ? mark : hot, off ? 0.18 : 0.42))
     // Which third is under the finger: 0 top, 1 middle, 2 bottom, -1 none.
     readonly property int pressedThird: upArea.pressed ? 0 : (midArea.pressed ? 1 : (downArea.pressed ? 2 : -1))
     implicitWidth: 50; implicitHeight: 150
@@ -671,8 +775,8 @@ Item {
       gradient: Gradient {
         GradientStop { position: 0.0; color: "transparent" }
         GradientStop { position: Math.max(0.0, parent.from - 0.002); color: "transparent" }
-        GradientStop { position: Math.max(0.001, parent.from); color: Qt.alpha(Color.accent, 0.5) }
-        GradientStop { position: Math.min(0.999, parent.from + 1 / 3); color: Qt.alpha(Color.accent, 0.5) }
+        GradientStop { position: Math.max(0.001, parent.from); color: Qt.alpha(rk.hot, 0.5) }
+        GradientStop { position: Math.min(0.999, parent.from + 1 / 3); color: Qt.alpha(rk.hot, 0.5) }
         GradientStop { position: Math.min(1.0, parent.from + 1 / 3 + 0.002); color: "transparent" }
         GradientStop { position: 1.0; color: "transparent" }
       }
@@ -689,7 +793,7 @@ Item {
           Text {
             anchors.centerIn: parent
             text: parent.modelData
-            color: Color.popups.text
+            color: rk.mark
             opacity: parent.index === 1 ? 1.0 : 0.8
             font.pixelSize: parent.index === 1 ? 22 : 20
           }
@@ -700,7 +804,7 @@ Item {
     MouseArea {
       id: upArea
       width: parent.width; height: parent.height / 3
-      onPressed: { rk.up(); again.dir = 1; again.interval = 380; again.start() }
+      onPressed: { rk.pressedDown(); rk.up(); again.dir = 1; again.interval = 380; again.start() }
       onReleased: again.stop()
       onCanceled: again.stop()
     }
@@ -708,13 +812,14 @@ Item {
       id: midArea
       y: parent.height / 3
       width: parent.width; height: parent.height / 3
+      onPressed: rk.pressedDown()
       onClicked: rk.middle()
     }
     MouseArea {
       id: downArea
       y: parent.height * 2 / 3
       width: parent.width; height: parent.height / 3
-      onPressed: { rk.down(); again.dir = -1; again.interval = 380; again.start() }
+      onPressed: { rk.pressedDown(); rk.down(); again.dir = -1; again.interval = 380; again.start() }
       onReleased: again.stop()
       onCanceled: again.stop()
     }
@@ -728,8 +833,146 @@ Item {
 
   Gradient {
     id: shellGradient
-    GradientStop { position: 0.0; color: Qt.lighter(Color.popups.background, 2.2) }
-    GradientStop { position: 1.0; color: Qt.lighter(Color.popups.background, 1.45) }
+    GradientStop { position: 0.0; color: root.skin ? root.skin.shellTop : "transparent" }
+    GradientStop { position: 1.0; color: root.skin ? root.skin.shellBottom : "transparent" }
+  }
+
+  // The pattern across a skin's shell. Drawn once per size or skin change,
+  // from a fixed seed, so it does not crawl; clipped to the shell's outline.
+  //   spots     irregular blots on a jittered grid, some with a paler heart
+  //   stripes   tapering, slightly wavy bands (a tiger's)
+  //   confetti  small bright shapes in a few colours
+  //   dots      a polka grid
+  //   grid      thin lines both ways, a brighter one now and then
+  //   ridges    fine horizontal grooves (moulded plastic)
+  //   stars     scattered points, a few with a four-point sparkle
+  component ShellPattern: Canvas {
+    id: skin
+    property string pattern: "none"
+    property int seed: 7
+    property real rTL: 0
+    property real rTR: 0
+    property real rBR: 0
+    property real rBL: 0
+    property color ink: "black"
+    property color glow: "white"
+    onWidthChanged: requestPaint()
+    onHeightChanged: requestPaint()
+    onInkChanged: requestPaint()
+    onGlowChanged: requestPaint()
+    onPatternChanged: requestPaint()
+    onVisibleChanged: requestPaint()
+    onPaint: {
+      var c = getContext("2d"), w = width, h = height
+      c.reset()
+      if (!visible || pattern === "none" || w < 4 || h < 4) return
+      var state = seed * 2654435761 % 4294967296
+      function rnd() {            // mulberry32: small, repeatable
+        state = (state + 0x6D2B79F5) | 0
+        var t = Math.imul(state ^ (state >>> 15), 1 | state)
+        t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t
+        return ((t ^ (t >>> 14)) >>> 0) / 4294967296
+      }
+      c.beginPath()
+      c.moveTo(rTL, 0); c.lineTo(w - rTR, 0); c.arcTo(w, 0, w, rTR, rTR)
+      c.lineTo(w, h - rBR); c.arcTo(w, h, w - rBR, h, rBR)
+      c.lineTo(rBL, h); c.arcTo(0, h, 0, h - rBL, rBL)
+      c.lineTo(0, rTL); c.arcTo(0, 0, rTL, 0, rTL)
+      c.closePath()
+      c.clip()
+      var x, y, i
+      if (pattern === "spots") {
+        var cell = 17
+        for (var gy = -1; gy * cell < h + cell; gy++) {
+          for (var gx = -1; gx * cell < w + cell; gx++) {
+            if (rnd() < 0.16) continue                     // a gap now and then
+            var cx = (gx + 0.5 + (rnd() - 0.5) * 0.8) * cell + (gy % 2 ? cell / 2 : 0)
+            var cy = (gy + 0.5 + (rnd() - 0.5) * 0.8) * cell
+            var r = 3.2 + rnd() * 3.4, n = 7, turn = rnd() * 6.283
+            var pts = []
+            for (i = 0; i < n; i++) {
+              var a = turn + i * 6.283 / n, rr = r * (0.62 + rnd() * 0.6)
+              pts.push([cx + Math.cos(a) * rr * 1.15, cy + Math.sin(a) * rr])
+            }
+            c.beginPath()
+            c.moveTo((pts[0][0] + pts[n - 1][0]) / 2, (pts[0][1] + pts[n - 1][1]) / 2)
+            for (var j = 0; j < n; j++) {
+              var q = pts[j], nx = pts[(j + 1) % n]
+              c.quadraticCurveTo(q[0], q[1], (q[0] + nx[0]) / 2, (q[1] + nx[1]) / 2)
+            }
+            c.closePath()
+            c.fillStyle = ink
+            c.fill()
+            if (rnd() < 0.3) {                             // a few carry a paler heart
+              c.beginPath(); c.arc(cx, cy, r * 0.28, 0, 6.283)
+              c.fillStyle = glow; c.fill()
+            }
+          }
+        }
+      } else if (pattern === "stripes") {
+        c.fillStyle = ink
+        for (y = -10; y < h + 20; y += 15 + rnd() * 12) {
+          var fromLeft = rnd() < 0.5, len = w * (0.55 + rnd() * 0.5), thick = 3.5 + rnd() * 4.5
+          var x0 = fromLeft ? -2 : w + 2, x1 = fromLeft ? len : w - len
+          var bend = (rnd() - 0.5) * 16, drop = 6 + rnd() * 10
+          c.beginPath()
+          c.moveTo(x0, y - thick)
+          c.quadraticCurveTo((x0 + x1) / 2, y + bend - thick * 0.6, x1, y + drop)   // tapers to a point
+          c.quadraticCurveTo((x0 + x1) / 2, y + bend + thick * 0.9, x0, y + thick)
+          c.closePath()
+          c.fill()
+        }
+      } else if (pattern === "confetti") {
+        var colours = [ink, glow, "#ffcc00", "#3ddc84"]
+        for (i = 0; i < w * h / 190; i++) {
+          x = rnd() * w; y = rnd() * h
+          c.save()
+          c.translate(x, y); c.rotate(rnd() * 3.14)
+          c.globalAlpha = 0.55 + rnd() * 0.3
+          c.fillStyle = colours[Math.floor(rnd() * colours.length)]
+          if (rnd() < 0.5) c.fillRect(-2.2, -1, 4.4, 2)
+          else { c.beginPath(); c.arc(0, 0, 1.5, 0, 6.283); c.fill() }
+          c.restore()
+        }
+      } else if (pattern === "dots") {
+        c.fillStyle = ink
+        var step = 13, row = 0
+        for (y = step / 2; y < h; y += step * 0.87, row++) {
+          for (x = (row % 2 ? step : step / 2); x < w; x += step) {
+            c.beginPath(); c.arc(x, y, 2.6, 0, 6.283); c.fill()
+          }
+        }
+      } else if (pattern === "grid") {
+        c.lineWidth = 1
+        for (x = 8; x < w; x += 16) {
+          c.strokeStyle = ink
+          c.beginPath(); c.moveTo(x + 0.5, 0); c.lineTo(x + 0.5, h); c.stroke()
+        }
+        for (y = 8, i = 0; y < h; y += 16, i++) {
+          c.strokeStyle = i % 5 === 2 ? glow : ink
+          c.beginPath(); c.moveTo(0, y + 0.5); c.lineTo(w, y + 0.5); c.stroke()
+        }
+      } else if (pattern === "ridges") {
+        for (y = 3; y < h; y += 6) {
+          c.fillStyle = ink;  c.fillRect(0, y, w, 1)
+          c.fillStyle = glow; c.fillRect(0, y + 1, w, 1)
+        }
+      } else if (pattern === "stars") {
+        for (i = 0; i < w * h / 210; i++) {
+          x = rnd() * w; y = rnd() * h
+          var big = rnd() < 0.09, sr = big ? 1.5 : 0.5 + rnd() * 0.9
+          c.globalAlpha = 0.45 + rnd() * 0.55
+          c.fillStyle = rnd() < 0.3 ? glow : ink
+          c.beginPath(); c.arc(x, y, sr, 0, 6.283); c.fill()
+          if (big) {
+            c.strokeStyle = ink; c.lineWidth = 0.8
+            c.beginPath(); c.moveTo(x - 4.5, y); c.lineTo(x + 4.5, y)
+            c.moveTo(x, y - 4.5); c.lineTo(x, y + 4.5); c.stroke()
+          }
+        }
+        c.globalAlpha = 1
+      }
+    }
   }
 
   // ---------------------------------------------------------------- the rail
@@ -743,6 +986,10 @@ Item {
   // keep (Style.gapsOut is half of Hyprland's gaps_out). No gap on the window
   // side: the windows bring their own.
   readonly property int railGap: Style.gapsOut * 2
+  // The controller is a grip on the screen, not a card floating beside it: it
+  // runs flush to the screen edges and is rounded only on the window side.
+  readonly property int edgeGap: controller ? 0 : railGap
+  readonly property int shellRadius: 26
   // As see-through as the terminal beside it. Omarchy's standard window
   // opacity is 0.985 (o.transparent_window in default/hypr/helpers.lua); the
   // popup colour already carries the theme's own alpha, which is what drops
@@ -762,23 +1009,40 @@ Item {
     WlrLayershell.namespace: "omarchy-tablet-rail"
     WlrLayershell.layer: WlrLayer.Top
     WlrLayershell.keyboardFocus: WlrKeyboardFocus.None
-    exclusiveZone: root.railSize + root.railGap
+    exclusiveZone: root.railSize + root.edgeGap
     anchors { right: true; bottom: true; top: !rail.upright; left: rail.upright }
-    implicitWidth: root.railSize + root.railGap
-    implicitHeight: root.railSize + root.railGap
+    implicitWidth: root.railSize + root.edgeGap
+    implicitHeight: root.railSize + root.edgeGap
 
     Rectangle {
       anchors.fill: parent
-      anchors.rightMargin: root.railGap
-      anchors.bottomMargin: root.railGap
-      anchors.topMargin: rail.upright ? 0 : root.railGap
-      anchors.leftMargin: rail.upright ? root.railGap : 0
-      radius: root.controller ? 26 : Style.cornerRadius
+      anchors.rightMargin: root.edgeGap
+      anchors.bottomMargin: root.edgeGap
+      anchors.topMargin: rail.upright ? 0 : root.edgeGap
+      anchors.leftMargin: rail.upright ? root.edgeGap : 0
+      radius: Style.cornerRadius
+      // Controller: square against the screen edges, round towards the windows.
+      topLeftRadius: root.controller ? root.shellRadius : radius
+      topRightRadius: root.controller ? (rail.upright ? root.shellRadius : 0) : radius
+      bottomLeftRadius: root.controller ? (rail.upright ? 0 : root.shellRadius) : radius
+      bottomRightRadius: root.controller ? 0 : radius
       color: Qt.alpha(Color.popups.background, Color.popups.background.a * root.railOpacity)
       // Controller look: a moulded shell, lighter than the caps set into it.
       gradient: root.controller ? shellGradient : null
-      border.color: root.controller ? Qt.alpha("white", 0.16) : Color.popups.border
+      border.color: root.controller ? Qt.alpha("white", 0.18) : Color.popups.border
       border.width: root.controller ? 1 : 2
+
+      ShellPattern {
+        anchors.fill: parent
+        anchors.margins: 1
+        visible: root.skin !== null
+        pattern: root.skin ? root.skin.pattern : "none"
+        seed: 11
+        rTL: parent.topLeftRadius; rTR: parent.topRightRadius
+        rBR: parent.bottomRightRadius; rBL: parent.bottomLeftRadius
+        ink: root.skin ? root.skin.ink : "transparent"
+        glow: root.skin ? root.skin.glow : "transparent"
+      }
 
       GridLayout {
         anchors.fill: parent
@@ -789,10 +1053,12 @@ Item {
 
         TouchButton {
 
-          cap: root.controller
+          skin: root.skin
+
+          onPressedDown: root.click()
           Layout.alignment: Qt.AlignCenter
           glyph: root.closeArmed ? "Close?" : "󰅖"
-          legend: Color.urgent
+          danger: true
           glyphSize: root.closeArmed ? 12 : 24
           boldGlyph: root.closeArmed
           active: root.closeArmed
@@ -802,30 +1068,37 @@ Item {
 
         TouchButton {
 
-          cap: root.controller
+          skin: root.skin
+
+          onPressedDown: root.click()
           Layout.alignment: Qt.AlignCenter
           glyph: "󰊓"
           onTapped: root.toggleMaximise()
         }
         TouchButton {
-          cap: root.controller
+          skin: root.skin
+          onPressedDown: root.click()
           Layout.alignment: Qt.AlignCenter
           visible: !root.dual
           glyph: "󰀻"
           onTapped: root.run(["omarchy-menu", "toggle", "apps"])
         }
         TouchButton {
-          cap: root.controller
+          skin: root.skin
+          onPressedDown: root.click()
           Layout.alignment: Qt.AlignCenter
           visible: !root.dual
           glyph: root.stayAwake ? "󰅶" : "󰛊"
           active: root.stayAwake
           onTapped: root.toggleStayAwake()
+          holdMs: 600
+          heldGlyph: "󰒓"
+          onHeld: root.settingsOpen = true
         }
 
         ScrollStrip {
 
-          cap: root.controller
+          skin: root.skin
           Layout.alignment: Qt.AlignCenter
           Layout.fillHeight: !rail.upright
           Layout.fillWidth: rail.upright
@@ -836,7 +1109,9 @@ Item {
 
         TouchButton {
 
-          cap: root.controller
+          skin: root.skin
+
+          onPressedDown: root.click()
           Layout.alignment: Qt.AlignCenter
           glyph: "󰓡"
           onTapped: root.run([root.home + "/.local/bin/tablet-touch", "next-window"])
@@ -844,24 +1119,47 @@ Item {
 
         TouchButton {
 
-          cap: root.controller
+          skin: root.skin
+
+          onPressedDown: root.click()
           Layout.alignment: Qt.AlignCenter
+          glyph: "󰌌"
+          onTapped: root.run([root.home + "/.local/bin/tablet-osk", "toggle"])
+        }
+        TouchButton {
+
+          skin: root.skin
+
+          onPressedDown: root.click()
+          Layout.alignment: Qt.AlignCenter
+          visible: !root.dual      // two rails: this arrow is on the left one
           glyph: "󰁍"
           heldGlyph: "󰖯"
           holdMs: root.carryMs
           onTapped: root.wsTapped("r-1")
           onHeld: root.wsHeld("r-1")
         }
-        Text {
+        Rectangle {
           Layout.alignment: Qt.AlignCenter
-          text: Hyprland.focusedWorkspace !== null ? Hyprland.focusedWorkspace.id : ""
-          color: Color.popups.text
-          opacity: 0.75
-          font.pixelSize: 17
-          font.bold: true
+          implicitWidth: 30; implicitHeight: 22
+          radius: 11
+          // On a skin the number sits on a chip of cap colour: a bare number
+          // is lost on a patterned shell.
+          color: root.skin ? root.skin.cap : "transparent"
+          border.width: root.skin ? 1 : 0
+          border.color: Qt.alpha("black", 0.5)
+          Text {
+            anchors.centerIn: parent
+            text: Hyprland.focusedWorkspace !== null ? Hyprland.focusedWorkspace.id : ""
+            color: root.skin ? root.skin.legend : Color.popups.text
+            opacity: root.skin ? 1.0 : 0.75
+            font.pixelSize: root.skin ? 14 : 17
+            font.bold: true
+          }
         }
         TouchButton {
-          cap: root.controller
+          skin: root.skin
+          onPressedDown: root.click()
           Layout.alignment: Qt.AlignCenter
           glyph: "󰁔"
           heldGlyph: "󰖯"
@@ -871,20 +1169,14 @@ Item {
         }
 
         TouchButton {
-
-          cap: root.controller
-          Layout.alignment: Qt.AlignCenter
-          glyph: "󰌌"
-          onTapped: root.run([root.home + "/.local/bin/tablet-osk", "toggle"])
-        }
-        TouchButton {
-          cap: root.controller
+          skin: root.skin
+          onPressedDown: root.click()
           Layout.alignment: Qt.AlignCenter
           glyph: "󰌑"
           onTapped: root.run(["ydotool", "key", "28:1", "28:0"])
         }
         MicButton {
-          cap: root.controller
+          skin: root.skin
           Layout.alignment: Qt.AlignCenter
           visible: root.hasMic
           size: 50
@@ -909,22 +1201,38 @@ Item {
     WlrLayershell.namespace: "omarchy-tablet-rail"
     WlrLayershell.layer: WlrLayer.Top
     WlrLayershell.keyboardFocus: WlrKeyboardFocus.None
-    exclusiveZone: root.railSize + root.railGap
+    exclusiveZone: root.railSize + root.edgeGap
     anchors { left: true; top: true; bottom: true }
-    implicitWidth: root.railSize + root.railGap
-    implicitHeight: root.railSize + root.railGap
+    implicitWidth: root.railSize + root.edgeGap
+    implicitHeight: root.railSize + root.edgeGap
 
     Rectangle {
       anchors.fill: parent
-      anchors.leftMargin: root.railGap
-      anchors.topMargin: root.railGap
-      anchors.bottomMargin: root.railGap
-      radius: root.controller ? 26 : Style.cornerRadius
+      anchors.leftMargin: root.edgeGap
+      anchors.topMargin: root.edgeGap
+      anchors.bottomMargin: root.edgeGap
+      radius: Style.cornerRadius
+      topRightRadius: root.controller ? root.shellRadius : radius
+      bottomRightRadius: root.controller ? root.shellRadius : radius
+      topLeftRadius: root.controller ? 0 : radius
+      bottomLeftRadius: root.controller ? 0 : radius
       color: Qt.alpha(Color.popups.background, Color.popups.background.a * root.railOpacity)
       // Controller look: a moulded shell, lighter than the caps set into it.
       gradient: root.controller ? shellGradient : null
-      border.color: root.controller ? Qt.alpha("white", 0.16) : Color.popups.border
+      border.color: root.controller ? Qt.alpha("white", 0.18) : Color.popups.border
       border.width: root.controller ? 1 : 2
+
+      ShellPattern {
+        anchors.fill: parent
+        anchors.margins: 1
+        visible: root.skin !== null
+        pattern: root.skin ? root.skin.pattern : "none"
+        seed: 29
+        rTL: parent.topLeftRadius; rTR: parent.topRightRadius
+        rBR: parent.bottomRightRadius; rBL: parent.bottomLeftRadius
+        ink: root.skin ? root.skin.ink : "transparent"
+        glow: root.skin ? root.skin.glow : "transparent"
+      }
 
       ColumnLayout {
         anchors.fill: parent
@@ -932,8 +1240,18 @@ Item {
         spacing: 10
 
         TouchButton {
+          skin: root.skin
+          onPressedDown: root.click()
+          Layout.alignment: Qt.AlignCenter
+          glyph: "󰒓"
+          active: root.settingsOpen
+          onTapped: root.settingsOpen = !root.settingsOpen
+        }
+        TouchButton {
 
-          cap: root.controller
+          skin: root.skin
+
+          onPressedDown: root.click()
           Layout.alignment: Qt.AlignCenter
           glyph: root.stayAwake ? "󰅶" : "󰛊"
           active: root.stayAwake
@@ -944,7 +1262,8 @@ Item {
 
         // Brightness and volume, each a rocker that shows its level.
         Rocker {
-          cap: root.controller
+          skin: root.skin
+          onPressedDown: root.click()
           Layout.alignment: Qt.AlignCenter
           glyph: "󰃟"
           level: root.brightness
@@ -952,7 +1271,8 @@ Item {
           onDown: root.brightnessStep("5%-")
         }
         Rocker {
-          cap: root.controller
+          skin: root.skin
+          onPressedDown: root.click()
           Layout.alignment: Qt.AlignCenter
           glyph: root.muted ? "󰖁" : "󰕾"
           level: root.volume
@@ -961,9 +1281,24 @@ Item {
           onDown: root.run(["omarchy-audio-output-volume", "lower"])
           onMiddle: root.run(["omarchy-audio-output-volume", "mute-toggle"])
         }
+
+        Item { Layout.fillHeight: true }
+
+        // Previous workspace here, next on the right rail: each under its own thumb.
+        TouchButton {
+          skin: root.skin
+          onPressedDown: root.click()
+          Layout.alignment: Qt.AlignCenter
+          glyph: "󰁍"
+          heldGlyph: "󰖯"
+          holdMs: root.carryMs
+          onTapped: root.wsTapped("r-1")
+          onHeld: root.wsHeld("r-1")
+        }
         // Play / pause; hold for the next track.
         TouchButton {
-          cap: root.controller
+          skin: root.skin
+          onPressedDown: root.click()
           Layout.alignment: Qt.AlignCenter
           glyph: "󰐎"
           heldGlyph: "󰒭"
@@ -971,12 +1306,11 @@ Item {
           onTapped: root.run(["omarchy-shell", "media", "playPause"])
           onHeld: root.run(["omarchy-shell", "media", "next"])
         }
-
-        Item { Layout.fillHeight: true }
-
         TouchButton {
 
-          cap: root.controller
+          skin: root.skin
+
+          onPressedDown: root.click()
           Layout.alignment: Qt.AlignCenter
           glyph: "󰀻"
           onTapped: root.run(["omarchy-menu", "toggle", "apps"])
@@ -1032,6 +1366,159 @@ Item {
       busy: root.busy
       onDown: root.micPress()
       onUp: root.micRelease()
+    }
+  }
+
+  // ------------------------------------------------------------ settings
+  PanelWindow {
+    id: settingsWin
+    visible: root.settingsOpen
+    screen: Quickshell.screens.length > 0 ? Quickshell.screens[0] : null
+    color: Qt.alpha("black", 0.35)
+    // The menu's name: bin/tablet-gestures leaves touches on it alone.
+    WlrLayershell.namespace: "omarchy-tablet-menu"
+    WlrLayershell.layer: WlrLayer.Overlay
+    WlrLayershell.keyboardFocus: WlrKeyboardFocus.None
+    exclusionMode: ExclusionMode.Ignore
+    anchors { top: true; bottom: true; left: true; right: true }
+
+    MouseArea { anchors.fill: parent; onClicked: root.settingsOpen = false }   // tap outside: done
+
+    Rectangle {
+      id: sheet
+      anchors.centerIn: parent
+      width: Math.min(parent.width - 180, 560)
+      height: sheetBody.implicitHeight + 36
+      radius: Math.max(Style.cornerRadius, 14)
+      color: Color.popups.background
+      border.color: Color.popups.border
+      border.width: 2
+      MouseArea { anchors.fill: parent }       // taps on the sheet are not "outside"
+
+      ColumnLayout {
+        id: sheetBody
+        anchors.fill: parent
+        anchors.margins: 18
+        spacing: 14
+
+        RowLayout {
+          Layout.fillWidth: true
+          Text {
+            text: "Tablet rails"
+            color: Color.popups.text
+            font.pixelSize: 20
+            font.bold: true
+            Layout.fillWidth: true
+          }
+          Rectangle {
+            implicitWidth: 78; implicitHeight: 36; radius: 18
+            color: doneArea.pressed ? Color.accent : Qt.alpha(Color.popups.text, 0.10)
+            Text { anchors.centerIn: parent; text: "Done"; font.pixelSize: 15
+                   color: doneArea.pressed ? Color.background : Color.popups.text }
+            MouseArea { id: doneArea; anchors.fill: parent; onClicked: root.settingsOpen = false }
+          }
+        }
+
+        Text { text: "Look"; color: Color.popups.text; opacity: 0.6; font.pixelSize: 13 }
+        GridLayout {
+          Layout.fillWidth: true
+          columns: 4
+          rowSpacing: 10
+          columnSpacing: 10
+          Repeater {
+            model: root.lookNames
+            Item {
+              id: sw
+              required property string modelData
+              readonly property var k: root.skinFor(modelData)
+              readonly property bool chosen: root.lookPref.trim() === modelData
+              Layout.fillWidth: true
+              implicitHeight: 86
+              // A miniature of the rail: shell, two caps and the accent button.
+              Rectangle {
+                id: mini
+                anchors { left: parent.left; right: parent.right; top: parent.top }
+                height: 60
+                radius: 12
+                border.width: sw.chosen ? 3 : 1
+                border.color: sw.chosen ? Color.accent : Qt.alpha(Color.popups.text, 0.25)
+                gradient: Gradient {
+                  GradientStop { position: 0.0; color: sw.k ? sw.k.shellTop : Color.popups.background }
+                  GradientStop { position: 1.0; color: sw.k ? sw.k.shellBottom : Color.popups.background }
+                }
+                ShellPattern {
+                  anchors.fill: parent
+                  anchors.margins: 3
+                  visible: sw.k !== null
+                  pattern: sw.k ? sw.k.pattern : "none"
+                  seed: 5
+                  rTL: 9; rTR: 9; rBR: 9; rBL: 9
+                  ink: sw.k ? sw.k.ink : "transparent"
+                  glow: sw.k ? sw.k.glow : "transparent"
+                }
+                Row {
+                  anchors.centerIn: parent
+                  spacing: 8
+                  Repeater {
+                    model: 3
+                    Rectangle {
+                      required property int index
+                      width: 26; height: 26; radius: 13
+                      color: sw.k ? (index === 2 ? sw.k.accent : sw.k.cap)
+                                  : (index === 2 ? Color.accent : Color.popups.background)
+                      border.width: sw.k ? 1.5 : 2
+                      border.color: sw.k ? Qt.alpha("black", 0.6) : Color.popups.border
+                    }
+                  }
+                }
+              }
+              Text {
+                anchors { top: mini.bottom; topMargin: 5; horizontalCenter: parent.horizontalCenter }
+                text: root.lookLabel(sw.modelData)
+                color: Color.popups.text
+                font.pixelSize: 13
+                font.bold: sw.chosen
+              }
+              MouseArea { anchors.fill: parent; onPressed: root.click(); onClicked: root.setLook(sw.modelData) }
+            }
+          }
+        }
+
+        // Two-way switches, drawn as a pair of pills with the chosen one filled.
+        Repeater {
+          model: [
+            { title: "Rails", a: "both", aLabel: "Both sides", b: "right", bLabel: "Right only" },
+            { title: "Button sounds", a: "on", aLabel: "On", b: "off", bLabel: "Off" }
+          ]
+          RowLayout {
+            id: sw2
+            required property var modelData
+            required property int index
+            readonly property string current: index === 0 ? (root.railsPref.trim() === "right" ? "right" : "both")
+                                                           : (root.soundsPref.trim() === "on" ? "on" : "off")
+            Layout.fillWidth: true
+            spacing: 8
+            Text { text: sw2.modelData.title; color: Color.popups.text; font.pixelSize: 15; Layout.fillWidth: true }
+            Repeater {
+              model: [{ v: sw2.modelData.a, l: sw2.modelData.aLabel }, { v: sw2.modelData.b, l: sw2.modelData.bLabel }]
+              Rectangle {
+                required property var modelData
+                readonly property bool on: sw2.current === modelData.v
+                implicitWidth: 112; implicitHeight: 38; radius: 19
+                color: on ? Color.accent : Qt.alpha(Color.popups.text, 0.08)
+                border.width: on ? 0 : 1
+                border.color: Qt.alpha(Color.popups.text, 0.2)
+                Text { anchors.centerIn: parent; text: parent.modelData.l; font.pixelSize: 14
+                       color: parent.on ? Color.background : Color.popups.text }
+                MouseArea {
+                  anchors.fill: parent
+                  onClicked: { if (sw2.index === 0) root.setRails(parent.modelData.v); else root.setSounds(parent.modelData.v) }
+                }
+              }
+            }
+          }
+        }
+      }
     }
   }
 

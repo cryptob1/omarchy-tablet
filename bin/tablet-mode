@@ -17,7 +17,10 @@ Reactions:
     tablet-mode set tablet|laptop | toggle | status
     tablet-mode mic always|auto      keep the mic button on screen in laptop mode too
     tablet-mode rails both|right     a rail on each edge (default), or one on the right
-    tablet-mode look theme|controller   draw the rails like Omarchy, or like a game controller
+    tablet-mode look <name>          how the rails are drawn: theme (plain Omarchy),
+                                     controller, cheetah, tiger, arcade, neon, retro,
+                                     candy, lava, galaxy, ice
+    tablet-mode sounds on|off        a soft tap as a rail button goes down
     tablet-mode dictation on|off     show the mic button at all (needs a dictation
                                      backend: see `tablet-touch` DICTATION)
     tablet-mode watch                detachable-keyboard detector (user service)
@@ -27,6 +30,8 @@ import os
 import subprocess
 import sys
 
+# The rails' looks; must match lookNames in shell/plugins/tablet.rail/Main.qml.
+LOOKS = ("theme", "controller", "cheetah", "tiger", "arcade", "neon", "retro", "candy", "lava", "galaxy", "ice")
 STATE_DIR = os.path.join(os.environ.get("XDG_STATE_HOME", os.path.expanduser("~/.local/state")), "tablet-mode")
 CONF_DIR = os.path.join(os.environ.get("XDG_CONFIG_HOME", os.path.expanduser("~/.config")), "tablet-mode")
 BIN = os.path.expanduser("~/.local/bin/")
@@ -111,8 +116,10 @@ def main():
         write(os.path.join(STATE_DIR, "mic"), cmd[1])
     elif cmd[0] == "rails" and len(cmd) == 2 and cmd[1] in ("both", "right"):
         write(os.path.join(STATE_DIR, "rails"), cmd[1])
-    elif cmd[0] == "look" and len(cmd) == 2 and cmd[1] in ("theme", "controller"):
+    elif cmd[0] == "look" and len(cmd) == 2 and cmd[1] in LOOKS:
         write(os.path.join(STATE_DIR, "look"), cmd[1])
+    elif cmd[0] == "sounds" and len(cmd) == 2 and cmd[1] in ("on", "off"):
+        write(os.path.join(STATE_DIR, "sounds"), cmd[1])
     elif cmd[0] == "dictation" and len(cmd) == 2 and cmd[1] in ("on", "off"):
         write(os.path.join(STATE_DIR, "dictation"), cmd[1])
     elif cmd[0] == "watch":

@@ -30,6 +30,9 @@ pgrep -x ydotoold >/dev/null 2>&1 \
 # --- commands ---------------------------------------------------------------
 for b in bin/*; do install -Dm755 "$b" "$HOME/.local/bin/$(basename "$b")"; done
 
+# --- the tap sound (`tablet-mode sounds on`) ---------------------------------
+install -Dm644 sounds/tap.wav "$HOME/.local/share/omarchy-tablet/tap.wav"
+
 # --- shell plugins: the rail and the screen timeout -------------------------
 for p in tablet.rail tablet.screenoff; do
   rm -rf "$HOME/.config/omarchy/plugins/$p"
