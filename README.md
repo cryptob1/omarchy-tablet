@@ -78,10 +78,10 @@ Every button's touch target is bigger than the button you see: it reaches out to
 | Brightness | A rocker: plus at the top, minus at the bottom, hold to keep going. It fills from the bottom to show the current level. |
 | Volume | The same rocker for volume; tap the speaker in the middle to mute. Uses Omarchy's own commands, so its on-screen display shows too. |
 | Paste | Pastes into the focused app; hold to copy instead. Uses the terminal's own shortcuts in a terminal. |
-| ‹ | Previous workspace, level with "next" on the right rail, so each direction is under its own thumb. Hold to take the focused window along. |
 | Play / pause | Hold for the next track. |
-| Launcher | Opens the app menu. |
-| Back | Goes back in the focused app, as on a phone (it sends Alt+Left: back in browsers, file managers and most apps with a history). Hold for forward. |
+| ‹ | Previous workspace, at the same height as "next" on the right rail, so each direction is under its own thumb. Hold to take the focused window along. |
+| Apps | Opens the app drawer: every app, big, on nearly the whole screen. Drag or flick to scroll, tap to launch. Hold for Omarchy's own launcher (which has search, and wants a keyboard). Three fingers up opens the drawer too. |
+| Back | Goes back in the focused app, as on a phone (it sends Alt+Left: back in browsers, file managers and most apps with a history); closes the app drawer or the settings panel if one is open. Hold for forward. |
 
 `tablet-mode rails right` puts everything except the media, volume and brightness controls on a single right-hand rail (hold Stay awake there for the settings panel); `tablet-mode rails both` brings the second one back. An upright screen always gets the single rail, along the bottom edge.
 
@@ -134,7 +134,7 @@ Choose one in the settings panel (the cog at the top of the left rail), or with 
 | Gesture | Does |
 |---|---|
 | Three fingers left / right | Next / previous workspace |
-| Three fingers up | App launcher |
+| Three fingers up | The app drawer |
 | Three fingers down | Next window on this workspace |
 | Four fingers up / down | Maximise / restore the focused window |
 | Hold one finger still | Copy / Paste / Select all menu beside the finger (not in browsers, which have their own) |

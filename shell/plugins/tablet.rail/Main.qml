@@ -7,8 +7,9 @@
 //   right, bottom up   mic, enter, NEXT workspace (with the number above
 //                      it), keyboard, switch window, the scroll strip,
 //                      maximise, and close at the top
-//   left, bottom up    back (hold: forward), launcher, play-pause (hold: next track), PREVIOUS
-//                      workspace level with "next" on the right, a volume
+//   left, bottom up    back (hold: forward), the app drawer, PREVIOUS workspace
+//                      level with "next" on the right, play-pause (hold: next
+//                      track), paste (hold: copy), a volume
 //                      rocker and a brightness rocker (plus / minus, hold to
 //                      repeat, filled to show the level; tap the speaker to
 //                      mute), and stay awake at the top
@@ -438,7 +439,7 @@ Item {
   property real slide: railsShown ? 1 : 0          // 1: in place, 0: off the edge
   Behavior on slide { NumberAnimation { duration: 260; easing.type: Easing.OutCubic } }
   // Whether the rails may slide away at all right now.
-  readonly property bool railHideAllowed: noKeyboard && railHideMs > 0 && !listening && !busy && !settingsOpen
+  readonly property bool railHideAllowed: noKeyboard && railHideMs > 0 && !listening && !busy && !settingsOpen && !drawerOpen
   // (Re)start the countdown, or stop it. The timer is only ever driven from
   // here: calling restart() on a Timer whose `running` is a binding starts it
   // whatever the binding says, and with "never" that hid the rails one second
@@ -486,9 +487,63 @@ Item {
   function wsTapped(rel) { run(["hyprctl", "dispatch", 'hl.dsp.focus({ workspace = "' + rel + '" })']) }
   function wsHeld(rel) { run(["hyprctl", "dispatch", 'hl.dsp.window.move({ workspace = "' + rel + '" })']) }
 
+  // THE APP DRAWER. Omarchy's own launcher is built for a keyboard: type to
+  // narrow, arrows to move. By touch it cannot be scrolled (a finger dragged on
+  // its grid picks an app up to move it) and it covers the rails, so touching
+  // the scroll strip closed it. So the rail's Apps button opens a drawer of
+  // our own instead: every app, big, on nearly the whole screen, scrolled by
+  // dragging and flinging, one tap to launch, as on a phone. Hold the button
+  // for Omarchy's launcher (search needs a keyboard).
+  property bool drawerOpen: false
+  readonly property var drawerApps: {
+    var list = [], seen = ({}), all = DesktopEntries.applications.values || []
+    for (var i = 0; i < all.length; i++) {
+      var e = all[i]
+      if (!e || e.noDisplay || !e.name) continue
+      var key = String(e.name).toLowerCase()
+      if (seen[key]) continue                     // the same app from two desktop files
+      seen[key] = true
+      list.push(e)
+    }
+    list.sort(function(a, b) { return String(a.name).toLowerCase().localeCompare(String(b.name).toLowerCase()) })
+    return list
+  }
+  function appIcon(icon) {
+    var name = String(icon || "")
+    if (name.length === 0) return Quickshell.iconPath("application-x-executable", true)
+    if (name.charAt(0) === "/") return "file://" + name
+    var themed = Quickshell.iconPath(name, true)
+    return themed && themed.length > 0 ? themed : Quickshell.iconPath("application-x-executable", true)
+  }
+  function launchApp(entry) {
+    drawerOpen = false
+    // As Omarchy's launcher does it: a terminal app in a terminal, anything
+    // else through its desktop file (so it gets its own systemd scope).
+    if (entry.runInTerminal && entry.command && entry.command.length > 0)
+      run(["omarchy-launch-tui"].concat(entry.command))
+    else
+      run(["uwsm-app", "--", "gtk-launch", String(entry.id).replace(/\.desktop$/, "") + ".desktop"])
+  }
+  // Three fingers up (bin/tablet-gestures, via `tablet-touch drawer`) opens it too.
+  FileView {
+    path: Quickshell.env("XDG_RUNTIME_DIR") + "/tablet-mode/drawer"
+    watchChanges: true
+    printErrors: false
+    onFileChanged: reload()
+    onLoaded: {
+      var at = Number(String(text()).trim()) || 0
+      if (Math.abs(Date.now() / 1000 - at) < 3) root.drawerOpen = !root.drawerOpen   // a stale file opens nothing
+    }
+  }
+
   // Back, as on a phone: Alt+Left to the focused app, which is "back" in
   // browsers, file managers and most apps with a history. Hold: forward.
-  function goBack() { run(["ydotool", "key", "56:1", "105:1", "105:0", "56:0"]) }
+  function goBack() {
+    // First of all, out of whatever of ours is open: that is what Back means.
+    if (drawerOpen) { drawerOpen = false; return }
+    if (settingsOpen) { settingsOpen = false; return }
+    run(["ydotool", "key", "56:1", "105:1", "105:0", "56:0"])
+  }
   function goForward() { run(["ydotool", "key", "56:1", "106:1", "106:0", "56:0"]) }
   // Same toggle as the four-finger swipe: fills the screen, bar and rail stay.
   function toggleMaximise() { run(["hyprctl", "dispatch", 'hl.dsp.window.fullscreen({ mode = "maximized" })']) }
@@ -1957,7 +2012,10 @@ Item {
           Layout.alignment: Qt.AlignCenter
           visible: !root.dual
           glyph: "󰀻"
-          onTapped: root.run(["omarchy-menu", "toggle", "apps"])
+          active: root.drawerOpen
+          holdMs: 600
+          onTapped: root.drawerOpen = !root.drawerOpen
+          onHeld: { root.drawerOpen = false; root.run(["omarchy-menu", "toggle", "apps"]) }
         }
         // Back (hold: forward). One rail: beside the launcher.
         TouchButton {
@@ -2276,17 +2334,6 @@ Item {
           onTapped: root.run([root.home + "/.local/bin/tablet-touch", "paste-here"])
           onHeld: root.run([root.home + "/.local/bin/tablet-touch", "copy-here"])
         }
-        // Previous workspace here, next on the right rail: each under its own thumb.
-        TouchButton {
-          skin: root.skin
-          onPressedDown: root.click()
-          Layout.alignment: Qt.AlignCenter
-          glyph: "󰁍"
-          heldGlyph: "󰖯"
-          holdMs: root.carryMs
-          onTapped: root.wsTapped("r-1")
-          onHeld: root.wsHeld("r-1")
-        }
         // Play / pause; hold for the next track.
         TouchButton {
           skin: root.skin
@@ -2298,6 +2345,18 @@ Item {
           onTapped: root.run(["omarchy-shell", "media", "playPause"])
           onHeld: root.run(["omarchy-shell", "media", "next"])
         }
+        // Previous workspace here, next on the right rail: each under its own thumb,
+        // and at the same height (third from the bottom on both rails).
+        TouchButton {
+          skin: root.skin
+          onPressedDown: root.click()
+          Layout.alignment: Qt.AlignCenter
+          glyph: "󰁍"
+          heldGlyph: "󰖯"
+          holdMs: root.carryMs
+          onTapped: root.wsTapped("r-1")
+          onHeld: root.wsHeld("r-1")
+        }
         TouchButton {
 
           skin: root.skin
@@ -2305,7 +2364,10 @@ Item {
           onPressedDown: root.click()
           Layout.alignment: Qt.AlignCenter
           glyph: "󰀻"
-          onTapped: root.run(["omarchy-menu", "toggle", "apps"])
+          active: root.drawerOpen
+          holdMs: 600
+          onTapped: root.drawerOpen = !root.drawerOpen
+          onHeld: { root.drawerOpen = false; root.run(["omarchy-menu", "toggle", "apps"]) }
         }
         // Back (hold: forward). Bottom of the left rail: under the thumb, where a phone has it.
         TouchButton {
@@ -2600,6 +2662,121 @@ Item {
         // The lip: light catching the edge where the frame turns down.
         c.strokeStyle = "rgba(255,255,255,0.38)"; c.lineWidth = 1
         ring(-0.5, rad); c.stroke()
+      }
+    }
+  }
+
+  // ---------------------------------------------------------- app drawer
+  PanelWindow {
+    id: drawer
+    visible: root.drawerOpen
+    screen: Quickshell.screens.length > 0 ? Quickshell.screens[0] : null
+    color: "transparent"
+    // The menu's name, so bin/tablet-gestures leaves a finger dragging here alone.
+    WlrLayershell.namespace: "omarchy-tablet-menu"
+    WlrLayershell.layer: WlrLayer.Overlay
+    WlrLayershell.keyboardFocus: WlrKeyboardFocus.None
+    exclusionMode: ExclusionMode.Ignore
+    anchors { top: true; bottom: true; left: true; right: true }
+    // Everything inside the frame, and none of the frame: the rails stay in
+    // reach (Back closes the drawer, the Apps button toggles it).
+    margins {
+      top: Style.bar.sizeHorizontal
+      bottom: root.upright ? root.railSize : (root.slide > 0 && root.barSkinned ? root.bezel : 0)
+      left: !root.upright && root.dual && root.slide > 0 ? root.railSize : 0
+      right: !root.upright && root.slide > 0 ? root.railSize : 0
+    }
+
+    Rectangle {
+      anchors.fill: parent
+      anchors.margins: 5
+      radius: 16
+      color: Qt.alpha(Color.popups.background, 1.0)    // solid: text behind it showed through the icons
+      border.color: Color.popups.border
+      border.width: 2
+      MouseArea { anchors.fill: parent }           // nothing falls through to the windows
+
+      Item {
+        id: drawerHead
+        anchors { left: parent.left; right: parent.right; top: parent.top; margins: 18 }
+        height: 40
+        Text {
+          anchors.verticalCenter: parent.verticalCenter
+          text: "Apps"
+          color: Color.popups.text
+          font.pixelSize: 22
+          font.bold: true
+        }
+        Rectangle {
+          anchors { right: parent.right; verticalCenter: parent.verticalCenter }
+          width: 92; height: 40; radius: 20
+          color: drawerCloseArea.pressed ? Color.accent : Qt.alpha(Color.popups.text, 0.10)
+          Text { anchors.centerIn: parent; text: "Close"; font.pixelSize: 15
+                 color: drawerCloseArea.pressed ? Color.background : Color.popups.text }
+          MouseArea { id: drawerCloseArea; anchors.fill: parent; anchors.margins: -8; onClicked: root.drawerOpen = false }
+        }
+      }
+
+      GridView {
+        id: drawerGrid
+        anchors { left: parent.left; right: parent.right; top: drawerHead.bottom; bottom: parent.bottom
+                  leftMargin: 14; rightMargin: 14; topMargin: 10; bottomMargin: 10 }
+        clip: true
+        model: root.drawerOpen ? root.drawerApps : []
+        // About 170 px a cell: seven across on a 13-inch screen in landscape, four upright.
+        readonly property int columns: Math.max(3, Math.floor(width / 170))
+        cellWidth: Math.floor(width / columns)
+        cellHeight: 132
+        boundsBehavior: Flickable.StopAtBounds
+        flickDeceleration: 2600
+        maximumFlickVelocity: 6000
+        onVisibleChanged: if (visible) positionViewAtBeginning()
+
+        delegate: Item {
+          id: cell
+          required property var modelData
+          width: drawerGrid.cellWidth
+          height: drawerGrid.cellHeight
+          Rectangle {
+            anchors.fill: parent
+            anchors.margins: 4
+            radius: 14
+            color: cellArea.pressed ? Qt.alpha(Color.accent, 0.30) : "transparent"
+          }
+          Image {
+            id: cellIcon
+            anchors.horizontalCenter: parent.horizontalCenter
+            y: 14
+            width: 68; height: 68
+            sourceSize.width: 136; sourceSize.height: 136
+            fillMode: Image.PreserveAspectFit
+            asynchronous: true
+            source: root.appIcon(cell.modelData.icon)
+          }
+          Text {
+            anchors { top: cellIcon.bottom; topMargin: 8; left: parent.left; right: parent.right; leftMargin: 8; rightMargin: 8 }
+            text: cell.modelData.name
+            color: Color.popups.text
+            font.pixelSize: 13
+            horizontalAlignment: Text.AlignHCenter
+            wrapMode: Text.Wrap
+            maximumLineCount: 2
+            elide: Text.ElideRight
+          }
+          // A tap launches; a drag is the grid's (it scrolls), never the cell's.
+          MouseArea { id: cellArea; anchors.fill: parent; onClicked: { root.click(); root.launchApp(cell.modelData) } }
+        }
+
+        // Where you are in the list.
+        Rectangle {
+          visible: drawerGrid.contentHeight > drawerGrid.height
+          anchors.right: parent.right
+          width: 4; radius: 2
+          color: Qt.alpha(Color.popups.text, 0.35)
+          height: Math.max(30, drawerGrid.height * drawerGrid.height / Math.max(1, drawerGrid.contentHeight))
+          y: drawerGrid.contentHeight > drawerGrid.height
+             ? (drawerGrid.height - height) * drawerGrid.contentY / (drawerGrid.contentHeight - drawerGrid.height) : 0
+        }
       }
     }
   }

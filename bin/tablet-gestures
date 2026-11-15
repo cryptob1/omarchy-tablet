@@ -375,7 +375,13 @@ def act(direction, fingers=3):
         return
     try:
         if fingers == 3 and direction == "up":
-            run_quiet("omarchy-menu", "toggle", "apps")
+            # The app drawer: a list a finger can scroll (Omarchy's launcher
+            # cannot be, by touch). In tablet mode only; with a keyboard on,
+            # Omarchy's own launcher, which is made for one.
+            if tablet_mode():
+                run_quiet(BIN + "tablet-touch", "drawer")
+            else:
+                run_quiet("omarchy-menu", "toggle", "apps")
             return
         if fingers == 3 and direction == "down":
             run_quiet(BIN + "tablet-touch", "next-window")

@@ -26,6 +26,9 @@
         Ctrl+V / Ctrl+C, or the terminal forms in a terminal (Ctrl+Shift+V; and
         for copy, the selection, since Ctrl+C there means interrupt).
 
+    tablet-touch drawer
+        Open or close the rail plugin's app drawer (what three fingers up does).
+
     tablet-touch scroll-aim
         The rail's scroll strip is about to send wheel events: put the pointer
         where they should go. That is the focused window, unless one of
@@ -381,6 +384,8 @@ def main():
         switch_window()
     elif cmd in ("paste-here", "copy-here"):
         menu(cmd.split("-")[0], focused_is_terminal(), "")
+    elif cmd == "drawer":
+        write("drawer", f"{time.time():.3f}\n")      # the rail plugin toggles its app drawer
     elif cmd == "scroll-aim":
         # The rail's scroll strip: wheel events go to whatever is under the
         # pointer, and a touch on the rail does not move it.
