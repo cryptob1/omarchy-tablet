@@ -691,20 +691,35 @@ class Select:
 
     def __init__(self):
         self.active = False
-        self.live = False      # the button is down now and the pointer follows the finger
+        self.hot = False       # a selection made through the cover, Shift held (see press)
+        self.live = False      # ...and its button is down, the pointer following the finger
         self.moved = 0.0
         self.mon = {}
         self.origin = None
 
     def press(self, px, py, word=False):
-        """Start a LIVE selection at normalised panel (px, py): the button goes
-        down now and follow() drags it under the finger, as on a phone. Only
-        for a touch on the cover (see Cover): the terminal has not seen the
-        finger, so it takes the pointer's press at once.
+        """Start a selection that follows the finger, as on a phone, at
+        normalised panel (px, py). Only for a touch on the cover (see Cover):
+        the terminal has not seen the finger, so it takes the pointer at once.
+        False if no terminal is there.
 
-        `word`: a long press. Click first, so the press is the second of a
-        double click: the terminal selects the word there, and a drag from it
-        extends word by word. False if no terminal is there."""
+        All of it with Shift held. A program that reads the mouse (herdr,
+        tmux, vim) is otherwise handed the clicks and the terminal selects
+        nothing; Shift is the terminal's "this one is mine". Every step below
+        was measured on 2026-11-15 in both kinds of terminal, with the same
+        result in each:
+          - a Shift-press EXTENDS a selection already there, so first a plain
+            click a little to one side drops the old one (to one side: at the
+            same cell it would count towards a double click);
+          - `word` (a long press): Shift double click selects the word. The
+            button is then UP. When the finger moves on, the selection is
+            started again from where the finger was held and dragged to where
+            it is. (Extending the word itself was tried: a Shift-press past
+            it selects from the word's LAST letter, losing the rest, and
+            double-click-and-drag does not extend by words with Shift held.)
+            Not at once on the word's own cell, or the press is a triple
+            click and takes the whole line;
+          - otherwise (a sideways drag): Shift-press, and drag."""
         mon = monitor()
         if DRY or terminal_at(px, py, mon) is None:
             return False
@@ -712,25 +727,61 @@ class Select:
         try:
             COVER.wait()
             self.mon, self.origin = mon, (px, py)
+            x, y = to_layout(px, py, mon)
+            side = 60 if x < mon.get("x", 0) + 200 else -60
+            hyprctl("dispatch", f"hl.dsp.cursor.move({{ x = {x + side}, y = {y} }})")
+            time.sleep(0.03)
+            self._button("0xC0")
+            time.sleep(0.03)
             self._move(px, py)
             time.sleep(0.03)
+            self._shift(True)
             if word:
                 self._button("0xC0")
                 time.sleep(0.04)
-            self._button("0x40")
+                self._button("0xC0")
+            else:
+                self._button("0x40")
         except (OSError, subprocess.SubprocessError):
+            self._shift(False)
             COVER.lift()
             return False
-        self.active = self.live = True
+        self.active = self.hot = True
+        self.live = not word                # the button is down
         self.moved = time.time()
         return True
 
     def follow(self, px, py):
-        if not self.live or time.time() - self.moved < 0.02:
+        if not self.hot or time.time() - self.moved < 0.02:
             return
-        self.moved = time.time()
         try:
+            if not self.live:
+                # After a long press: wait until the finger is clear of the
+                # word's cell, or the double click is old (see press()).
+                x0, y0 = to_layout(*self.origin, self.mon)
+                x1, y1 = to_layout(px, py, self.mon)
+                if max(abs(x1 - x0), abs(y1 - y0)) < 24 and time.time() - self.moved < 0.6:
+                    return
+                self._shift(False)
+                side = 60 if x0 < self.mon.get("x", 0) + 200 else -60
+                hyprctl("dispatch", f"hl.dsp.cursor.move({{ x = {x0 + side}, y = {y0} }})")
+                time.sleep(0.03)
+                self._button("0xC0")        # drop the word
+                time.sleep(0.03)
+                self._move(*self.origin)
+                time.sleep(0.03)
+                self._shift(True)
+                self._button("0x40")
+                self.live = True
+            self.moved = time.time()
             self._move(px, py)
+        except (OSError, subprocess.SubprocessError):
+            pass
+
+    def _shift(self, down):
+        try:
+            subprocess.run(["ydotool", "key", "42:1" if down else "42:0"], stdout=subprocess.DEVNULL,
+                           stderr=subprocess.DEVNULL, timeout=2)
         except (OSError, subprocess.SubprocessError):
             pass
 
@@ -759,15 +810,17 @@ class Select:
         if not self.active:
             return
         self.active = False
-        if self.live:                       # let go where the finger lifted
-            self.live = False
+        if self.hot:                        # let go where the finger lifted
             try:
-                if px is not None:
-                    self._move(px, py)
-                    time.sleep(0.02)
-                self._button("0x80")
+                if self.live:
+                    if px is not None:
+                        self._move(px, py)
+                        time.sleep(0.02)
+                    self._button("0x80")
             except (OSError, subprocess.SubprocessError):
                 pass
+            self.hot = self.live = False
+            self._shift(False)
             COVER.lift()
             return
         if px is None:
@@ -1083,7 +1136,7 @@ def run(node):
                                 MENU.hide()
                         if one == "scroll":
                             scroll.update(x1 / xr, y1 / yr, now)
-                        elif one == "select" and SELECT.live:
+                        elif one == "select" and SELECT.hot:
                             if pressed and not selecting and (abs(x1 - x0) / xr > ONE_FINGER_SLOP
                                                               or abs(y1 - y0) / yr > ONE_FINGER_SLOP):
                                 selecting = True           # the menu steps aside for the drag
@@ -1205,6 +1258,7 @@ def main():
     atexit.register(COVER.reset)
     threading.Thread(target=COVER.watch, daemon=True).start()
     atexit.register(SELECT.end)
+    atexit.register(lambda: SELECT._shift(False))       # never leave Shift held
     signal.signal(signal.SIGTERM, lambda *_: sys.exit(0))   # run atexit on systemd stop
     SHIELD.reset()          # a previous run may have died mid-gesture
     threading.Thread(target=follow_focus, daemon=True).start()

@@ -177,11 +177,11 @@ So terminals never get the finger. The shell plugin keeps a see-through surface 
 | Tap | A click exactly there: tabs, panes and buttons in a terminal program work. |
 | Drag up / down, one finger or two | Scrolls, with a fling. Nothing is selected. |
 | Hold on a word | Selects that word, as on a phone, and shows Copy / Paste / Select all. |
-| Hold, then drag | Extends the selection word by word under the finger. Lift, and the menu is there to copy it. |
+| Hold, then drag | Selects from where you held to where the finger is, following it. Lift, and the menu is there to copy it. |
 | Drag that starts sideways | Selects letter by letter under the finger, without the hold. |
 | The rail's scroll strip | Scrolls the focused terminal without touching it. |
 
-A terminal with another window floating over it, or a fullscreen one, is left uncovered and behaves as Ghostty does by itself. `TABLET_GESTURES_COVER=0` in the gesture service's environment turns the cover off.
+A terminal with another window floating over it, or a fullscreen one, is left uncovered and behaves as Ghostty does by itself. Selections are made with Shift held, which is how a terminal is told to select for itself inside a program that reads the mouse (herdr, tmux, vim): it works the same there as at a shell prompt. `TABLET_GESTURES_COVER=0` in the gesture service's environment turns the cover off.
 
 ### Rotation
 
