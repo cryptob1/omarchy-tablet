@@ -788,17 +788,21 @@ Item {
   property real memLoad: -1
   property real batLevel: -1                       // 0-1, or -1 with no battery
   property bool batCharging: false
+  property real batWatts: -1                       // into or out of the battery; -1 unknown
+  readonly property int meterW: 52
+  readonly property int meterSpan: 4 * meterW + 3 * 6
   readonly property real loadHot: 0.85
   Process {
     id: loadProbe
     // The battery, too: the first power supply that is a battery and is the
     // machine's own (a stylus or a mouse reports one as well). Some report a
     // percentage, some only how much energy or charge is left of how much.
-    command: ["sh", "-c", "omarchy-system-stats; for d in /sys/class/power_supply/*; do [ \"$(cat $d/type 2>/dev/null)\" = Battery ] || continue; [ \"$(cat $d/scope 2>/dev/null)\" = Device ] && continue; if [ -r $d/capacity ]; then c=$(cat $d/capacity); else n=$(cat $d/energy_now 2>/dev/null || cat $d/charge_now 2>/dev/null); f=$(cat $d/energy_full 2>/dev/null || cat $d/charge_full 2>/dev/null); [ -n \"$n\" ] && [ \"${f:-0}\" -gt 0 ] && c=$((n * 100 / f)); fi; [ -n \"$c\" ] && echo \"battery $c $(cat $d/status 2>/dev/null)\"; break; done"]
+    command: ["sh", "-c", "omarchy-system-stats; for d in /sys/class/power_supply/*; do [ \"$(cat $d/type 2>/dev/null)\" = Battery ] || continue; [ \"$(cat $d/scope 2>/dev/null)\" = Device ] && continue; if [ -r $d/capacity ]; then c=$(cat $d/capacity); else n=$(cat $d/energy_now 2>/dev/null || cat $d/charge_now 2>/dev/null); f=$(cat $d/energy_full 2>/dev/null || cat $d/charge_full 2>/dev/null); [ -n \"$n\" ] && [ \"${f:-0}\" -gt 0 ] && c=$((n * 100 / f)); fi; [ -n \"$c\" ] && echo \"battery $c $(cat $d/status 2>/dev/null) $(cat $d/power_now 2>/dev/null)\"; break; done"]
     stdout: SplitParser {
       onRead: (line) => {
         var text = String(line), m
-        if ((m = text.match(/^battery\s+(\d+)\s*(\w*)/))) {
+        if ((m = text.match(/^battery\s+(\d+)\s*(\w*)\s*(-?\d*)/))) {
+          root.batWatts = m[3] !== "" ? Math.abs(Number(m[3])) / 1e6 : -1
           root.batLevel = Number(m[1]) / 100
           root.batCharging = m[2] === "Charging" || m[2] === "Full"
           return
@@ -2996,7 +3000,7 @@ Item {
       visible: root.pagerOn
       skin: root.skin
       corner: root.corner
-      x: parent.width - root.railSize - 16 - 3 * 74 - width - 12
+      x: parent.width - root.railSize - 16 - root.meterSpan - width - 10
       y: root.frameRadius + (root.bezel - 34) / 2
       label: Qt.formatTime(root.now, "HH:mm")
       lit: root.barPeek
@@ -3008,12 +3012,12 @@ Item {
     MouseArea {
       id: meterTap
       visible: root.pagerOn
-      x: parent.width - root.railSize - 16 - 3 * 74 - 4
+      x: parent.width - root.railSize - 16 - root.meterSpan - 3
       y: root.frameRadius
-      width: 3 * 74 + 8; height: root.bezel
+      width: root.meterSpan + 6; height: root.bezel
       onPressed: function(mouse) {
         root.click()
-        root.run(["omarchy-shell", "-q", mouse.x > 2 * 74 ? "omarchy.power" : "omarchy.monitor", "toggle"])
+        root.run(["omarchy-shell", "-q", mouse.x > 2 * (root.meterW + 6) ? "omarchy.power" : "omarchy.monitor", "toggle"])
       }
     }
     // Wi-Fi and Bluetooth: Omarchy's own panels, which open without its bar.
@@ -3063,54 +3067,55 @@ Item {
       }
     }
 
-    // The meters (see LOAD): processor, memory, battery. Each is a labelled
-    // plate with, when there is room, a groove and a lit part in it. With the
-    // key strip up there is not: the plates move out to the ends.
+    // The meters (see LOAD): processor, memory, battery, and the watts going
+    // out of (or into) the battery. Each is a small gauge set into the band
+    // like the keys: what it is, how much, and a lit bar along its foot.
     Repeater {
-      model: 3
-      Item {
+      model: 4
+      Rectangle {
         id: meter
         required property int index
-        readonly property real load: index === 0 ? root.cpuLoad : (index === 1 ? root.memLoad : root.batLevel)
-        // Processor and memory are a warning when high, the battery when low.
-        readonly property bool hot: index === 2 ? (load < 0.15 && !root.batCharging) : load >= root.loadHot
+        readonly property real load: index === 0 ? root.cpuLoad : (index === 1 ? root.memLoad
+                                     : (index === 2 ? root.batLevel : (root.batWatts < 0 ? -1 : Math.min(1, root.batWatts / 20))))
+        // Processor and memory are a warning when high, the battery when low,
+        // the draw when it would empty the battery in a couple of hours.
+        readonly property bool hot: index === 2 ? (load < 0.15 && !root.batCharging)
+                                    : (index === 3 ? (!root.batCharging && root.batWatts >= 18) : load >= root.loadHot)
         readonly property color lit: hot ? (root.skin ? root.skin.close : Color.urgent)
                                          : (root.skin ? root.skin.accent : Color.accent)
-        readonly property real room: parent.width - 2 * root.railSize - 60
-        readonly property real span: (room - 2 * 30) / 3
-        readonly property bool compact: root.keysShown || root.pagerOn
-        visible: root.barSkinned && !root.upright && load >= 0
-        x: compact ? (root.pagerOn ? parent.width - root.railSize - 16 - (3 - index) * 74
-                                   : (index === 2 ? parent.width - root.railSize - 24 - tag.width : root.railSize + 24 + index * 84))
-                   : root.railSize + 30 + index * (span + 30)
-        y: root.frameRadius
-        width: compact ? tag.width : span; height: root.bezel
-
-        Rectangle {
-          id: tag
-          anchors.verticalCenter: parent.verticalCenter
-          width: tagText.implicitWidth + 12; height: meter.compact ? 16 : 10; radius: height / 2
-          color: Qt.alpha("black", 0.62)
-          Text {
-            id: tagText
-            anchors.centerIn: parent
-            text: (meter.index === 0 ? "CPU " : (meter.index === 1 ? "MEM " : (root.batCharging ? "BAT+ " : "BAT ")))
-                  + Math.round(Math.max(0, meter.load) * 100) + "%"
-            color: meter.hot ? meter.lit : "#e9edf2"
-            font.pixelSize: meter.compact ? 10 : 8
-            font.bold: true
-            font.letterSpacing: 0.4
-          }
+        readonly property color ink: root.skin ? root.skin.legend : Color.popups.text
+        visible: root.pagerOn && load >= 0
+        x: parent.width - root.railSize - 16 - root.meterSpan + index * (root.meterW + 6)
+        y: root.frameRadius + (root.bezel - 34) / 2
+        width: root.meterW; height: 34
+        radius: Math.min(9, Math.max(4, height * root.corner))
+        color: Qt.alpha("black", 0.55)                 // a dark glass, not a key: it is read, not pressed
+        border.width: 1
+        border.color: Qt.alpha("white", 0.16)
+        Text {
+          anchors { horizontalCenter: parent.horizontalCenter; top: parent.top; topMargin: 3 }
+          text: meter.index === 0 ? "CPU" : (meter.index === 1 ? "MEM"
+                : (meter.index === 2 ? (root.batCharging ? "CHARGE" : "BATT") : (root.batCharging ? "IN" : "DRAW")))
+          color: Qt.alpha("white", 0.62)
+          font.pixelSize: 7
+          font.bold: true
+          font.letterSpacing: 0.8
         }
-        Rectangle {
-          visible: !meter.compact
-          anchors { left: tag.right; leftMargin: 6; right: parent.right; verticalCenter: parent.verticalCenter }
-          height: 6; radius: 3
-          color: Qt.alpha("black", 0.62)
+        Text {
+          anchors { horizontalCenter: parent.horizontalCenter; top: parent.top; topMargin: 10 }
+          text: meter.index === 3 ? root.batWatts.toFixed(root.batWatts < 10 ? 1 : 0) + "W"
+                                  : Math.round(Math.max(0, meter.load) * 100) + "%"
+          color: meter.hot ? meter.lit : "#f1f3f6"
+          font.pixelSize: 12
+          font.bold: true
+        }
+        Rectangle {                                    // the groove along its foot
+          anchors { left: parent.left; right: parent.right; bottom: parent.bottom; margins: 4 }
+          height: 3; radius: 1.5
+          color: Qt.alpha("white", 0.14)
           Rectangle {
-            x: 1; y: 1
-            height: parent.height - 2; radius: 2
-            width: Math.max(4, (parent.width - 2) * Math.max(0, Math.min(1, meter.load)))
+            height: parent.height; radius: 1.5
+            width: Math.max(3, parent.width * Math.max(0, Math.min(1, meter.load)))
             color: meter.lit
             Behavior on width { NumberAnimation { duration: 600; easing.type: Easing.OutCubic } }
           }
