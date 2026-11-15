@@ -881,7 +881,8 @@ Item {
     }
   }
 
-  // Scroll strip: drag along it to scroll the focused window, let go while
+  // Scroll strip: drag along it to scroll the focused window (as a mouse wheel
+  // would: down is further on), let go while
   // moving and it carries on, slowing down. It turns the drag into mouse-wheel
   // notches, so it works on anything that scrolls with a wheel — above all
   // terminals, where a finger on the text is a mouse and selects.
@@ -1895,7 +1896,11 @@ Item {
           Layout.fillWidth: rail.upright
           horizontal: rail.upright
           onAim: root.run([root.home + "/.local/bin/tablet-touch", "scroll-aim"])
-          onWheel: (notches) => Quickshell.execDetached(["ydotool", "mousemove", "--wheel", "-x", "0", "-y", String(notches)])
+          // It is drawn as a wheel, so it turns like one: roll it DOWN and the
+          // page scrolls down (the text moves up). The reverse of a finger on
+          // the content itself, which drags the text with it; on a wheel that
+          // felt backwards.
+          onWheel: (notches) => Quickshell.execDetached(["ydotool", "mousemove", "--wheel", "-x", "0", "-y", String(-notches)])
         }
 
         TouchButton {
