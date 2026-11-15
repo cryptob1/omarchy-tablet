@@ -431,7 +431,7 @@ Item {
   }
   function toggleKeyboard() {
     if (keyboardPref.trim() === "full") run([home + "/.local/bin/tablet-osk", "toggle"])
-    else kbOpen = !kbOpen
+    else { run([home + "/.local/bin/tablet-osk", "hide"]); kbOpen = !kbOpen }   // never both
   }
   function setKeyboard(v) {
     keyboardPref = v
@@ -2530,10 +2530,7 @@ Item {
           Layout.alignment: Qt.AlignCenter
           glyph: "󰌌"
           active: root.kbOpen
-          holdMs: 600
           onTapped: root.toggleKeyboard()
-          // Hold: the other keyboard, the full-width one.
-          onHeld: { root.kbOpen = false; root.run([root.home + "/.local/bin/tablet-osk", "toggle"]) }
         }
 
         TouchButton {

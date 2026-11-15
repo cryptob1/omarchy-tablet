@@ -151,7 +151,7 @@ Next to the clock are a Wi-Fi key and a Bluetooth key, which open Omarchy's own 
 
 **The thumb keyboard.** An ordinary on-screen keyboard runs the width of the screen, and held by its sides a 13-inch tablet lets your thumbs reach about a third of it. This one is split: the letters sit in two blocks, one against each rail, under your thumbs. Digits and symbols are all in the middle at once, so there are no layers to switch. Shift is one-shot (tap twice for caps lock), Ctrl is one-shot, and backspace and the arrows repeat while held. The windows make room, so what you are typing into stays in view. Upright, the digits and symbols move above the letters.
 
-It is also the keyboard on the lock screen: touch a locked tablet and it comes up (the full-width one does instead if you chose that, or if this one fails to appear). The rail's keyboard button opens it; hold the button for the full-width keyboard (wvkbd) instead. `tablet-mode keyboard full` makes the full-width one the default, `split` goes back. It is also in the settings panel.
+It is also the keyboard on the lock screen: touch a locked tablet and it comes up (the full-width one does instead if you chose that, or if this one fails to appear). The rail's keyboard button opens it. `tablet-mode keyboard full` switches to the full-width keyboard (wvkbd), `split` goes back. It is also in the settings panel.
 
 **Load.** Three meters in the bottom bezel: processor, memory and battery, each with its percentage. Processor and memory turn the look's warning colour above 85%, the battery below 15%. With the key strip up they shrink to small plates at its ends.
 
