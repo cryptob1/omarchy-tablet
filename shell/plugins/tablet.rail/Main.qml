@@ -265,8 +265,8 @@ Item {
   // The frame is CLOSED along the bottom by a thin bezel in the same shell: a
   // U of thick sides and a thin top reads as three strips, a closed ring reads
   // as one object with the screen set into it. It costs the windows this much
-  // height.
-  readonly property int bezel: 8
+  // height; it is as tall as it is to carry the load meters.
+  readonly property int bezel: 12
   // A rim skin keeps its coloured edge. Otherwise the edge is a thin dark seam:
   // the frame is shaded to fall away into the screen, and a pale line there (as
   // it was) made a second border round the windows' own.
@@ -551,10 +551,10 @@ Item {
     else { powerArmed = what; powerArmTimer.restart() }
   }
 
-  // LOAD. How hard the machine is working, shown as two hairlines in the
-  // bottom bezel: processor on the left half, memory on the right. Faint by
-  // design: they are there when you look for them and not otherwise, and turn
-  // the look's warning colour above `loadHot`. Read every few seconds from
+  // LOAD. How hard the machine is working, shown as two meters in the bottom
+  // bezel: processor on the left half, memory on the right, each labelled
+  // with its figure. (They began as unlabelled hairlines, which were too easy
+  // to miss.) They turn the look's warning colour above `loadHot`. Read every few seconds from
   // `omarchy-system-stats`, and only while the bezel is showing.
   property real cpuLoad: -1
   property real memLoad: -1
@@ -2614,26 +2614,51 @@ Item {
       glow: root.skin ? root.skin.glow : "transparent"
     }
 
-    // The load hairlines (see LOAD): a dark groove with a lit part in it.
+    // The load meters (see LOAD): each a labelled groove with a lit part in it.
     Repeater {
       model: 2
       Item {
         id: meter
         required property int index
         readonly property real load: index === 0 ? root.cpuLoad : root.memLoad
-        readonly property real span: (parent.width - 2 * root.railSize - 120) / 2
+        readonly property bool hot: load >= root.loadHot
+        readonly property color lit: hot ? (root.skin ? root.skin.close : Color.urgent)
+                                         : (root.skin ? root.skin.accent : Color.accent)
+        readonly property real span: (parent.width - 2 * root.railSize - 100) / 2
         visible: root.framed && load >= 0
-        x: root.railSize + 40 + index * (span + 40)
-        y: root.frameRadius + (root.bezel - 3) / 2
-        width: span; height: 3
-        Rectangle { anchors.fill: parent; radius: 1.5; color: Qt.alpha("black", 0.38) }
+        x: root.railSize + 30 + index * (span + 40)
+        y: root.frameRadius
+        width: span; height: root.bezel
+
+        // The label and the figure sit on small dark plates, so they read on
+        // any shell, patterned or pale.
         Rectangle {
-          height: parent.height; radius: 1.5
-          width: Math.max(3, parent.width * Math.max(0, Math.min(1, meter.load)))
-          color: meter.load >= root.loadHot ? (root.skin ? root.skin.close : Color.urgent)
-                                            : (root.skin ? root.skin.accent : Color.accent)
-          opacity: meter.load >= root.loadHot ? 0.95 : 0.6
-          Behavior on width { NumberAnimation { duration: 600; easing.type: Easing.OutCubic } }
+          id: tag
+          anchors.verticalCenter: parent.verticalCenter
+          width: tagText.implicitWidth + 12; height: 10; radius: 5
+          color: Qt.alpha("black", 0.62)
+          Text {
+            id: tagText
+            anchors.centerIn: parent
+            text: (meter.index === 0 ? "CPU " : "MEM ") + Math.round(Math.max(0, meter.load) * 100) + "%"
+            color: meter.hot ? meter.lit : "#e9edf2"
+            font.pixelSize: 8
+            font.bold: true
+            font.letterSpacing: 0.4
+          }
+        }
+        Rectangle {
+          id: groove
+          anchors { left: tag.right; leftMargin: 6; right: parent.right; verticalCenter: parent.verticalCenter }
+          height: 6; radius: 3
+          color: Qt.alpha("black", 0.62)
+          Rectangle {
+            x: 1; y: 1
+            height: parent.height - 2; radius: 2
+            width: Math.max(4, (parent.width - 2) * Math.max(0, Math.min(1, meter.load)))
+            color: meter.lit
+            Behavior on width { NumberAnimation { duration: 600; easing.type: Easing.OutCubic } }
+          }
         }
       }
     }
