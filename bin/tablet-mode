@@ -262,9 +262,9 @@ def bar_mode(skinned):
 
 
 def bar_colors(text):
-    """Make Omarchy's bar see-through with `text`-coloured writing (a skin's
-    strip is drawn behind it), or put it back ("clear"). Edits only its own
-    marked block in the [bar] section of the machine's shell overrides.
+    """Make Omarchy's bar see-through (a skin's strip is drawn behind it), or
+    put it back ("clear"). Edits only its own marked block in the [bar] section
+    of the machine's shell overrides.
 
     The marks are lines of their own: a comment after a value is not safe
     here, since the colours themselves start with "#"."""
@@ -283,7 +283,11 @@ def bar_colors(text):
         elif not skipping and not line.rstrip().endswith("# omarchy-tablet"):   # (an earlier format)
             kept.append(line)
     if text != "clear":
-        ours = [BAR_OPEN, "background-alpha = 0.0", f'text = "{text}"', BAR_CLOSE]
+        # Only the background. NOT the text colour: Omarchy's panels (Wi-Fi,
+        # Bluetooth, audio) take theirs from the same key, so a dark bar text
+        # for a light skin made every panel dark-on-dark. The bar's writing
+        # keeps the theme's colour and the skin gives it a dark glass to sit on.
+        ours = [BAR_OPEN, "background-alpha = 0.0", BAR_CLOSE]
         heads = [i for i, l in enumerate(kept) if l.strip() == "[bar]"]
         if heads:
             kept[heads[0] + 1:heads[0] + 1] = ours

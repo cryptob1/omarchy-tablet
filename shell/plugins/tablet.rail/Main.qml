@@ -214,10 +214,14 @@ Item {
   // THE TOP BAR JOINS IN. With a skin on, Omarchy's bar is made see-through
   // and a strip in the skin's shell (colour and pattern) is drawn behind it,
   // so the bar reads as the top of the controller, not a separate thing. The
-  // bar's text is set to whichever of dark or light reads on that shell. Both
-  // go through the machine's own ~/.config/omarchy/shell.toml (`tablet-mode
-  // bar-colors`), and are taken back out with the plain look, with the
-  // keyboard attached, or if the bar is not along the top.
+  // bar's WRITING is left alone, in the theme's colour: Omarchy's panels take
+  // their text colour from the same setting, and changing it for a light skin
+  // made the Wi-Fi and Bluetooth panels unreadable. Instead the strip carries
+  // a status glass, a dark window let into the shell, for the writing to sit
+  // on, whatever the shell's colour. The see-through goes through the
+  // machine's own ~/.config/omarchy/shell.toml (`tablet-mode bar-colors`) and
+  // is taken back out with the plain look, with the keyboard attached, or if
+  // the bar is not along the top.
   property string barPosition: "top"
   FileView {
     path: root.home + "/.config/omarchy/shell.json"
@@ -251,7 +255,7 @@ Item {
   // it was) made a second border round the windows' own.
   readonly property color frameEdge: !skin ? "transparent" : (skin.rim ? skin.rim : Qt.alpha("black", 0.0))
   readonly property int frameEdgeWidth: skin && skin.rim ? 3 : 1
-  readonly property string barWanted: barSkinned ? barText : ""
+  readonly property string barWanted: barSkinned ? "on" : ""
   onBarWantedChanged: applyBar()
   function applyBar() {
     Quickshell.execDetached([home + "/.local/bin/tablet-mode", "bar-colors", barWanted.length > 0 ? barWanted : "clear"])
@@ -2102,14 +2106,32 @@ Item {
       glow: root.skin ? root.skin.glow : "transparent"
       palette: root.skin && root.skin.palette ? root.skin.palette : []
     }
-    CharField {
-      anchors { top: parent.top; left: parent.left; right: parent.right }
-      height: Style.bar.sizeHorizontal
+    // The status glass: the theme's own bar colour, as a window recessed
+    // into the shell (shadowed along its top, lit along its bottom lip).
+    Rectangle {
       visible: root.skin !== null
-      row: true
-      chars: root.skin && root.skin.chars ? root.skin.chars : []
-      seed: 13
-      opacity: 0.55                      // behind the bar's own writing
+      x: 5; y: 2
+      width: parent.width - 10; height: Style.bar.sizeHorizontal - 4
+      radius: height / 2
+      gradient: Gradient {                 // the slot it sits in
+        GradientStop { position: 0.0; color: Qt.alpha("black", 0.70) }
+        GradientStop { position: 1.0; color: Qt.alpha("white", 0.34) }
+      }
+      Rectangle {
+        anchors.fill: parent
+        anchors.margins: 1
+        radius: height / 2
+        color: Color.background
+        Rectangle {                        // a faint reflection across the top of the glass
+          anchors { left: parent.left; right: parent.right; top: parent.top; margins: 1 }
+          height: parent.height * 0.45
+          radius: height / 2
+          gradient: Gradient {
+            GradientStop { position: 0.0; color: Qt.alpha("white", 0.10) }
+            GradientStop { position: 1.0; color: Qt.alpha("white", 0.0) }
+          }
+        }
+      }
     }
   }
 
