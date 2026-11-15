@@ -2249,6 +2249,17 @@ Item {
 
         Item { Layout.fillHeight: true }
 
+        // Paste into the focused app (hold: copy). Above the workspace arrow on the left rail.
+        TouchButton {
+          skin: root.skin
+          onPressedDown: root.click()
+          Layout.alignment: Qt.AlignCenter
+          glyph: "󰆒"
+          heldGlyph: "󰆏"
+          holdMs: 500
+          onTapped: root.run([root.home + "/.local/bin/tablet-touch", "paste-here"])
+          onHeld: root.run([root.home + "/.local/bin/tablet-touch", "copy-here"])
+        }
         // Previous workspace here, next on the right rail: each under its own thumb.
         TouchButton {
           skin: root.skin

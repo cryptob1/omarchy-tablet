@@ -21,6 +21,11 @@
         the mouse selection (a long press is itself a click, which clears the
         highlight, but the selection is still in the primary clipboard).
 
+    tablet-touch paste-here | copy-here
+        The rail's paste button (hold: copy), on whatever window has focus:
+        Ctrl+V / Ctrl+C, or the terminal forms in a terminal (Ctrl+Shift+V; and
+        for copy, the selection, since Ctrl+C there means interrupt).
+
     tablet-touch scroll-aim
         The rail's scroll strip is about to send wheel events: put the pointer
         over the focused window so they reach it.
@@ -94,6 +99,20 @@ def mic_state():
             return f.read().strip() or "idle"
     except OSError:
         return str(read_json(CORTEX_STATE).get("class", "idle"))
+
+
+# Window classes that are terminals (as in bin/tablet-gestures).
+TERMINALS = set(os.environ.get(
+    "TABLET_GESTURES_SCROLL_CLASSES",
+    "com.mitchellh.ghostty,foot,footclient,alacritty,kitty,org.wezfurlong.wezterm").lower().split(","))
+
+
+def focused_is_terminal():
+    try:
+        cls = json.loads(hyprctl("activewindow", "-j") or "{}").get("class", "")
+    except (ValueError, OSError, subprocess.SubprocessError):
+        return False
+    return str(cls).lower() in TERMINALS
 
 
 def cortex_idle():
@@ -330,6 +349,8 @@ def main():
         mic_guard(float(args[1]))
     elif cmd == "next-window":
         switch_window()
+    elif cmd in ("paste-here", "copy-here"):
+        menu(cmd.split("-")[0], focused_is_terminal(), "")
     elif cmd == "scroll-aim":
         # The rail's scroll strip: wheel events go to the window under the
         # pointer, and a touch on the rail does not move it.

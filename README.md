@@ -77,6 +77,7 @@ Every button's touch target is bigger than the button you see: it reaches out to
 | Rotate | Tap to swap landscape and portrait; hold to turn the screen upside down. |
 | Brightness | A rocker: plus at the top, minus at the bottom, hold to keep going. It fills from the bottom to show the current level. |
 | Volume | The same rocker for volume; tap the speaker in the middle to mute. Uses Omarchy's own commands, so its on-screen display shows too. |
+| Paste | Pastes into the focused app; hold to copy instead. Uses the terminal's own shortcuts in a terminal. |
 | ‹ | Previous workspace, level with "next" on the right rail, so each direction is under its own thumb. Hold to take the focused window along. |
 | Play / pause | Hold for the next track. |
 | Launcher | Opens the app menu. |
