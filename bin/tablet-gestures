@@ -886,7 +886,11 @@ def run(node):
                         if scroll is not None and peak <= 2:
                             scroll.release()
                         if peak == 1 and len(start) == 1:
-                            (_, _, x1, y1), = start.values()
+                            (x0, y0, x1, y1), = start.values()
+                            if (one is None and not pressed and not selecting and began is not None
+                                    and time.time() - began < LONGPRESS
+                                    and abs(x1 - x0) / xr <= ONE_FINGER_SLOP and abs(y1 - y0) / yr <= ONE_FINGER_SLOP):
+                                tap_terminal(x1 / xr, y1 / yr)
                             if one == "select":
                                 SELECT.end(x1 / xr, y1 / yr)
                             # A selection just ended (ours in a terminal, the
@@ -901,6 +905,49 @@ def run(node):
         SELECT.end()
         SHIELD.reset()
         os.close(fd)
+
+
+def tap_terminal(px, py):
+    """A finger tapped at normalised panel (px, py). If a terminal is there,
+    click it with the pointer at that spot.
+
+    Ghostty does pass a touch tap to a program that asked for the mouse (herdr,
+    tmux, htop, a TUI with tabs), but as a click at cell 1;1, wherever the
+    finger was: its click handler reads the pointer's position, and a touch
+    does not move the pointer. (Measured 2026-11-15: a tap mid-window arrived
+    as `ESC[<0;1;1M`, with the pointer inside the window or out of it.) So the
+    tap did nothing, or pressed whatever is in the top-left corner. A real
+    click after the touch has ended lands where the finger was. The 1;1 click
+    still happens first; nothing here can take it back."""
+    if DRY:
+        return
+    try:
+        mon = monitor()
+        if terminal_at(px, py, mon) is None:
+            return
+        x, y = to_layout(px, py, mon)
+        if inside((x, y), ignored_rects(json.loads(hyprctl("layers", "-j") or "{}"))):
+            return
+        time.sleep(0.06)                    # let the terminal see the touch end
+        hyprctl("dispatch", f"hl.dsp.cursor.move({{ x = {x}, y = {y} }})")
+        time.sleep(0.03)
+        subprocess.run(["ydotool", "click", "0xC0"], stdout=subprocess.DEVNULL,
+                       stderr=subprocess.DEVNULL, timeout=2)
+        # Then put the pointer in the window's top-left corner. Left where it
+        # is, the NEXT tap's stray click lands here again (the terminal uses
+        # the pointer's last place in the window, even after it has left): tap
+        # "new tab", tap anywhere else, and there were two new tabs. From the
+        # corner the stray click is at 1;1, as it was before any of this.
+        time.sleep(0.05)
+        ws = (mon.get("activeWorkspace") or {}).get("id")
+        win = window_at((x, y), json.loads(hyprctl("clients", "-j") or "[]"), ws)
+        if win:
+            hyprctl("dispatch", f"hl.dsp.cursor.move({{ x = {win['at'][0] + 4}, y = {win['at'][1] + 4} }})")
+            # A warp alone tells the terminal nothing; it takes real motion.
+            subprocess.run(["ydotool", "mousemove", "-x", "-2", "-y", "-2"], stdout=subprocess.DEVNULL,
+                           stderr=subprocess.DEVNULL, timeout=2)
+    except (ValueError, OSError, subprocess.SubprocessError):
+        pass
 
 
 def main():
