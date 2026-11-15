@@ -34,6 +34,9 @@ Reactions:
                                      touch (0: never); the next touch brings them back
     tablet-mode buttons <shape>      the buttons' shape: auto (each look's own),
                                      round, rounded, square
+    tablet-mode keys auto|always|off the key strip in the bottom bezel: with the apps
+                                     that have a set of keys (terminals, browsers),
+                                     always, or never
     tablet-mode sounds on|off        a soft tap as a rail button goes down
     tablet-mode dictation on|off     show the mic button at all (needs a dictation
                                      backend: see `tablet-touch` DICTATION)
@@ -329,6 +332,8 @@ def main():
         write(os.path.join(STATE_DIR, "hide"), cmd[1])
     elif cmd[0] == "buttons" and len(cmd) == 2 and cmd[1] in ("auto", "round", "rounded", "square"):
         write(os.path.join(STATE_DIR, "buttons"), cmd[1])
+    elif cmd[0] == "keys" and len(cmd) == 2 and cmd[1] in ("auto", "always", "off"):
+        write(os.path.join(STATE_DIR, "keys"), cmd[1])
     elif cmd[0] == "sounds" and len(cmd) == 2 and cmd[1] in ("on", "off"):
         write(os.path.join(STATE_DIR, "sounds"), cmd[1])
     elif cmd[0] == "bar-colors" and len(cmd) == 2:

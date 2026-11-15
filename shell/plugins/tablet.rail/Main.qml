@@ -266,7 +266,72 @@ Item {
   // U of thick sides and a thin top reads as three strips, a closed ring reads
   // as one object with the screen set into it. It costs the windows this much
   // height; it is as tall as it is to carry the load meters.
-  readonly property int bezel: 12
+  readonly property int bezel: keysShown ? 48 : 12
+
+  // THE KEY STRIP. Without a keyboard, the keys an app needs all the time are
+  // a whole on-screen keyboard away. So the bottom bezel grows a row of them,
+  // chosen by what has focus:
+  //   a terminal   Esc, Tab, Shift+Tab, Ctrl+C, the arrows, 1 2 3, /
+  //                (a coding agent in a terminal asks for exactly these)
+  //   a browser    previous / next tab, new tab, close tab, reopen, reload,
+  //                the address bar, find, smaller / larger text
+  // `tablet-mode keys auto|always|off`: with the apps that have a set (the
+  // default), always (the terminal set stands in elsewhere), or never.
+  property string keysPref: "auto"
+  readonly property var terminalApps: ["com.mitchellh.ghostty", "foot", "footclient", "alacritty", "kitty", "org.wezfurlong.wezterm"]
+  // The focused app's id. Kept through the moments when nothing has focus (a
+  // menu opening), or the strip, and every window with it, would jump.
+  property string focusedApp: ""
+  readonly property var activeTop: ToplevelManager.activeToplevel
+  onActiveTopChanged: if (activeTop && activeTop.appId) focusedApp = String(activeTop.appId).toLowerCase()
+  readonly property string keyContext: {
+    var app = focusedApp
+    if (terminalApps.indexOf(app) >= 0) return "terminal"
+    if (/chrome|chromium|brave|firefox|zen|vivaldi|librewolf/.test(app)) return "browser"
+    return ""
+  }
+  readonly property bool keysShown: {
+    var want = keysPref.trim()
+    if (!(barSkinned && !upright && slide === 1) || want === "off") return false
+    return want === "always" || keyContext !== ""
+  }
+  readonly property var keySets: ({
+    terminal: [
+      { l: "Esc", k: [1] }, { l: "Tab", k: [15] }, { l: "\u21e7Tab", k: [42, 15] }, { l: "Ctrl C", k: [29, 46] },
+      { l: "\u2190", k: [105], r: true }, { l: "\u2191", k: [103], r: true }, { l: "\u2193", k: [108], r: true }, { l: "\u2192", k: [106], r: true },
+      { l: "1", k: [2] }, { l: "2", k: [3] }, { l: "3", k: [4] }, { l: "/", k: [53] }
+    ],
+    browser: [
+      { l: "\u2039 Tab", k: [29, 42, 15] }, { l: "Tab \u203a", k: [29, 15] }, { l: "New tab", k: [29, 20] },
+      { l: "Close tab", k: [29, 17] }, { l: "Reopen", k: [29, 42, 20] }, { l: "Reload", k: [29, 19] },
+      { l: "Address", k: [29, 38] }, { l: "Find", k: [29, 33] }, { l: "A\u2212", k: [29, 12] }, { l: "A+", k: [29, 13] }
+    ]
+  })
+  readonly property var keySet: keySets[keyContext] || keySets.terminal
+  // Press the keys of a chord in order and let go in reverse (evdev key codes).
+  function sendKeys(codes) {
+    var args = ["ydotool", "key"], i
+    for (i = 0; i < codes.length; i++) args.push(codes[i] + ":1")
+    for (i = codes.length - 1; i >= 0; i--) args.push(codes[i] + ":0")
+    Quickshell.execDetached(args)
+  }
+  function setKeys(v) { keysPref = v; run([home + "/.local/bin/tablet-mode", "keys", v]) }
+  FileView {
+    path: root.stateDir + "/keys"
+    watchChanges: true
+    printErrors: false
+    onFileChanged: reload()
+    onLoaded: root.keysPref = text()
+    onLoadFailed: root.keysPref = "auto"
+  }
+
+  // TODAY. The calendar button on the left rail: the time and date large
+  // enough to read at arm's length, the battery, and the month.
+  property bool todayOpen: false
+  property var now: new Date()
+  property int monthShift: 0                       // months from this one, in the grid
+  Timer { interval: 20000; repeat: true; running: root.todayOpen; triggeredOnStart: true; onTriggered: root.now = new Date() }
+  onTodayOpenChanged: monthShift = 0
   // A rim skin keeps its coloured edge. Otherwise the edge is a thin dark seam:
   // the frame is shaded to fall away into the screen, and a pale line there (as
   // it was) made a second border round the windows' own.
@@ -469,7 +534,7 @@ Item {
   property real slide: railsShown ? 1 : 0          // 1: in place, 0: off the edge
   Behavior on slide { NumberAnimation { duration: 260; easing.type: Easing.OutCubic } }
   // Whether the rails may slide away at all right now.
-  readonly property bool railHideAllowed: noKeyboard && railHideMs > 0 && !listening && !busy && !settingsOpen && !drawerOpen && !powerOpen
+  readonly property bool railHideAllowed: noKeyboard && railHideMs > 0 && !listening && !busy && !settingsOpen && !drawerOpen && !powerOpen && !todayOpen
   // (Re)start the countdown, or stop it. The timer is only ever driven from
   // here: calling restart() on a Timer whose `running` is a binding starts it
   // whatever the binding says, and with "never" that hid the rails one second
@@ -588,13 +653,23 @@ Item {
   // `omarchy-system-stats`, and only while the bezel is showing.
   property real cpuLoad: -1
   property real memLoad: -1
+  property real batLevel: -1                       // 0-1, or -1 with no battery
+  property bool batCharging: false
   readonly property real loadHot: 0.85
   Process {
     id: loadProbe
-    command: ["omarchy-system-stats"]
+    // The battery, too: the first power supply that is a battery and is the
+    // machine's own (a stylus or a mouse reports one as well). Some report a
+    // percentage, some only how much energy or charge is left of how much.
+    command: ["sh", "-c", "omarchy-system-stats; for d in /sys/class/power_supply/*; do [ \"$(cat $d/type 2>/dev/null)\" = Battery ] || continue; [ \"$(cat $d/scope 2>/dev/null)\" = Device ] && continue; if [ -r $d/capacity ]; then c=$(cat $d/capacity); else n=$(cat $d/energy_now 2>/dev/null || cat $d/charge_now 2>/dev/null); f=$(cat $d/energy_full 2>/dev/null || cat $d/charge_full 2>/dev/null); [ -n \"$n\" ] && [ \"${f:-0}\" -gt 0 ] && c=$((n * 100 / f)); fi; [ -n \"$c\" ] && echo \"battery $c $(cat $d/status 2>/dev/null)\"; break; done"]
     stdout: SplitParser {
       onRead: (line) => {
         var text = String(line), m
+        if ((m = text.match(/^battery\s+(\d+)\s*(\w*)/))) {
+          root.batLevel = Number(m[1]) / 100
+          root.batCharging = m[2] === "Charging" || m[2] === "Full"
+          return
+        }
         if ((m = text.match(/^cpu\s+([\d.]+)%/))) root.cpuLoad = Number(m[1]) / 100
         else if ((m = text.match(/^memory\s+([\d.]+)\s*\w*\s*\/\s*([\d.]+)/))) root.memLoad = Number(m[2]) > 0 ? Number(m[1]) / Number(m[2]) : -1
       }
@@ -604,7 +679,7 @@ Item {
     interval: 4000
     repeat: true
     triggeredOnStart: true
-    running: root.framed
+    running: root.framed || root.todayOpen
     onTriggered: if (!loadProbe.running) loadProbe.running = true
   }
 
@@ -615,6 +690,7 @@ Item {
     if (drawerOpen) { drawerOpen = false; return }
     if (settingsOpen) { settingsOpen = false; return }
     if (powerOpen) { powerOpen = false; return }
+    if (todayOpen) { todayOpen = false; return }
     run(["ydotool", "key", "56:1", "105:1", "105:0", "56:0"])
   }
   function goForward() { run(["ydotool", "key", "56:1", "106:1", "106:0", "56:0"]) }
@@ -1217,6 +1293,57 @@ Item {
     }
   }
 
+  // A key on the key strip: a cap like the buttons', as wide as its legend.
+  component KeyCap: Rectangle {
+    id: kc
+    property var skin: null
+    property real corner: 0.5
+    property string label: ""
+    property bool repeats: false
+    signal hit()
+    signal pressedDown()
+    readonly property color base: skin ? skin.cap : Color.popups.background
+    property real sink: kcArea.pressed ? 1 : 0
+    Behavior on sink { NumberAnimation { duration: kc.sink > 0.5 ? 110 : 55 } }
+    transform: Translate { y: kc.sink * 2 }
+    implicitWidth: Math.max(46, kcText.implicitWidth + 24)
+    implicitHeight: 34
+    radius: corner >= 0.5 ? height / 2 : Math.max(4, height * corner)
+    border.width: 1.5
+    border.color: skin ? Qt.alpha("black", 0.6) : Color.popups.border
+    gradient: Gradient {
+      GradientStop { position: 0.0; color: kcArea.pressed ? Qt.darker(kc.base, 1.3) : Qt.tint(kc.base, Qt.alpha("white", 0.18)) }
+      GradientStop { position: 1.0; color: kcArea.pressed ? Qt.tint(kc.base, Qt.alpha("white", 0.06)) : Qt.darker(kc.base, 1.4) }
+    }
+    Rectangle {       // its socket
+      z: -1
+      anchors.centerIn: parent
+      width: parent.width + 6; height: parent.height + 6; radius: parent.radius + 3
+      transform: Translate { y: -kc.sink * 2 }
+      gradient: Gradient {
+        GradientStop { position: 0.0; color: Qt.alpha("black", 0.60) }
+        GradientStop { position: 1.0; color: Qt.alpha("white", 0.26) }
+      }
+    }
+    Text {
+      id: kcText
+      anchors.centerIn: parent
+      text: kc.label
+      color: kc.skin ? kc.skin.legend : Color.popups.text
+      font.pixelSize: 13
+      font.bold: true
+    }
+    MouseArea {
+      id: kcArea
+      anchors.fill: parent
+      anchors.margins: -4
+      onPressed: { kc.pressedDown(); kc.hit(); if (kc.repeats) { kcAgain.interval = 380; kcAgain.start() } }
+      onReleased: kcAgain.stop()
+      onCanceled: kcAgain.stop()
+    }
+    Timer { id: kcAgain; repeat: true; onTriggered: { interval = 70; kc.hit() } }
+  }
+
   // A rocker: one capsule for a level that goes up and down. Plus at the top,
   // minus at the bottom, both repeating while held; what it controls in the
   // middle (tap: `middle()`, e.g. mute). The capsule fills from the bottom to
@@ -1243,7 +1370,7 @@ Item {
       Qt.alpha(off ? mark : hot, off ? 0.18 : 0.42))
     // Which third is under the finger: 0 top, 1 middle, 2 bottom, -1 none.
     readonly property int pressedThird: upArea.pressed ? 0 : (midArea.pressed ? 1 : (downArea.pressed ? 2 : -1))
-    implicitWidth: 50; implicitHeight: 120
+    implicitWidth: 50; implicitHeight: 96      // short: the left rail is full
     radius: width * corner
     border.color: cap ? Qt.alpha("black", 0.6) : Color.popups.border
     border.width: cap ? 1.5 : 2
@@ -2434,6 +2561,15 @@ Item {
           onTapped: root.toggleStayAwake()
         }
 
+        TouchButton {
+          skin: root.skin
+          corner: root.corner
+          onPressedDown: root.click()
+          Layout.alignment: Qt.AlignCenter
+          glyph: "󰃭"
+          active: root.todayOpen
+          onTapped: root.todayOpen = !root.todayOpen
+        }
         Item { Layout.fillHeight: true }
 
         Rocker {
@@ -2649,7 +2785,7 @@ Item {
     exclusiveZone: root.slide > 0 ? root.bezel : 0
     anchors { bottom: true; left: true; right: true }
     implicitHeight: root.bezel + root.frameRadius
-    mask: Region {}
+    mask: Region { item: keyRow }                  // only the keys take a touch
 
     ShellPattern {
       id: bezelPattern
@@ -2673,41 +2809,67 @@ Item {
       glow: root.skin ? root.skin.glow : "transparent"
     }
 
-    // The load meters (see LOAD): each a labelled groove with a lit part in it.
+    // The key strip (see THE KEY STRIP), in the middle of the band.
+    Row {
+      id: keyRow
+      visible: root.keysShown
+      anchors.horizontalCenter: parent.horizontalCenter
+      y: root.frameRadius + (root.bezel - 34) / 2
+      spacing: 9
+      Repeater {
+        model: root.keysShown ? root.keySet : []
+        KeyCap {
+          required property var modelData
+          skin: root.skin
+          corner: root.corner
+          label: modelData.l
+          repeats: !!modelData.r
+          onPressedDown: root.click()
+          onHit: root.sendKeys(modelData.k)
+        }
+      }
+    }
+
+    // The meters (see LOAD): processor, memory, battery. Each is a labelled
+    // plate with, when there is room, a groove and a lit part in it. With the
+    // key strip up there is not: the plates move out to the ends.
     Repeater {
-      model: 2
+      model: 3
       Item {
         id: meter
         required property int index
-        readonly property real load: index === 0 ? root.cpuLoad : root.memLoad
-        readonly property bool hot: load >= root.loadHot
+        readonly property real load: index === 0 ? root.cpuLoad : (index === 1 ? root.memLoad : root.batLevel)
+        // Processor and memory are a warning when high, the battery when low.
+        readonly property bool hot: index === 2 ? (load < 0.15 && !root.batCharging) : load >= root.loadHot
         readonly property color lit: hot ? (root.skin ? root.skin.close : Color.urgent)
                                          : (root.skin ? root.skin.accent : Color.accent)
-        readonly property real span: (parent.width - 2 * root.railSize - 100) / 2
-        visible: root.framed && load >= 0
-        x: root.railSize + 30 + index * (span + 40)
+        readonly property real room: parent.width - 2 * root.railSize - 60
+        readonly property real span: (room - 2 * 30) / 3
+        readonly property bool compact: root.keysShown
+        visible: root.barSkinned && !root.upright && load >= 0
+        x: compact ? (index === 2 ? parent.width - root.railSize - 24 - tag.width : root.railSize + 24 + index * 84)
+                   : root.railSize + 30 + index * (span + 30)
         y: root.frameRadius
-        width: span; height: root.bezel
+        width: compact ? tag.width : span; height: root.bezel
 
-        // The label and the figure sit on small dark plates, so they read on
-        // any shell, patterned or pale.
         Rectangle {
           id: tag
           anchors.verticalCenter: parent.verticalCenter
-          width: tagText.implicitWidth + 12; height: 10; radius: 5
+          width: tagText.implicitWidth + 12; height: meter.compact ? 16 : 10; radius: height / 2
           color: Qt.alpha("black", 0.62)
           Text {
             id: tagText
             anchors.centerIn: parent
-            text: (meter.index === 0 ? "CPU " : "MEM ") + Math.round(Math.max(0, meter.load) * 100) + "%"
+            text: (meter.index === 0 ? "CPU " : (meter.index === 1 ? "MEM " : (root.batCharging ? "BAT+ " : "BAT ")))
+                  + Math.round(Math.max(0, meter.load) * 100) + "%"
             color: meter.hot ? meter.lit : "#e9edf2"
-            font.pixelSize: 8
+            font.pixelSize: meter.compact ? 10 : 8
             font.bold: true
             font.letterSpacing: 0.4
           }
         }
         Rectangle {
-          id: groove
+          visible: !meter.compact
           anchors { left: tag.right; leftMargin: 6; right: parent.right; verticalCenter: parent.verticalCenter }
           height: 6; radius: 3
           color: Qt.alpha("black", 0.62)
@@ -2852,6 +3014,128 @@ Item {
         // The lip: light catching the edge where the frame turns down.
         c.strokeStyle = "rgba(255,255,255,0.38)"; c.lineWidth = 1
         ring(-0.5, rad); c.stroke()
+      }
+    }
+  }
+
+  // --------------------------------------------------------------- today
+  PanelWindow {
+    id: todayWin
+    visible: root.todayOpen
+    screen: Quickshell.screens.length > 0 ? Quickshell.screens[0] : null
+    color: Qt.alpha("black", 0.35)
+    WlrLayershell.namespace: "omarchy-tablet-menu"
+    WlrLayershell.layer: WlrLayer.Overlay
+    WlrLayershell.keyboardFocus: WlrKeyboardFocus.None
+    exclusionMode: ExclusionMode.Ignore
+    anchors { top: true; bottom: true; left: true; right: true }
+    MouseArea { anchors.fill: parent; onClicked: root.todayOpen = false }
+
+    Rectangle {
+      id: todaySheet
+      readonly property var shown: new Date(root.now.getFullYear(), root.now.getMonth() + root.monthShift, 1)
+      readonly property int startCol: (shown.getDay() + 6) % 7           // weeks start on Monday
+      readonly property int days: new Date(shown.getFullYear(), shown.getMonth() + 1, 0).getDate()
+      x: root.dual && !root.upright ? root.railSize + 14 : (parent.width - width) / 2
+      y: Math.max(Style.bar.sizeHorizontal + 10, (parent.height - height) / 2 - 40)
+      width: 420
+      height: todayBody.implicitHeight + 40
+      radius: Math.max(Style.cornerRadius, 14)
+      color: Color.popups.background
+      border.color: Color.popups.border
+      border.width: 2
+      MouseArea { anchors.fill: parent }
+
+      Column {
+        id: todayBody
+        anchors { left: parent.left; right: parent.right; top: parent.top; margins: 20 }
+        spacing: 12
+
+        Text {
+          text: Qt.formatTime(root.now, "h:mm")
+          color: Color.popups.text
+          font.pixelSize: 64
+          font.bold: true
+        }
+        Text {
+          text: Qt.formatDate(root.now, "dddd, d MMMM yyyy")
+          color: Color.popups.text
+          opacity: 0.8
+          font.pixelSize: 18
+        }
+        Text {
+          visible: root.batLevel >= 0
+          text: "Battery " + Math.round(root.batLevel * 100) + "%" + (root.batCharging ? ", charging" : "")
+          color: root.batLevel < 0.15 && !root.batCharging ? Color.urgent : Color.popups.text
+          opacity: 0.8
+          font.pixelSize: 15
+        }
+        Rectangle { width: parent.width; height: 1; color: Qt.alpha(Color.popups.text, 0.15) }
+
+        Item {
+          width: parent.width; height: 40
+          Text {
+            anchors.verticalCenter: parent.verticalCenter
+            text: Qt.formatDate(todaySheet.shown, "MMMM yyyy")
+            color: Color.popups.text
+            font.pixelSize: 18
+            font.bold: true
+          }
+          Row {
+            anchors { right: parent.right; verticalCenter: parent.verticalCenter }
+            spacing: 8
+            Repeater {
+              model: [{ l: "󰅁", d: -1 }, { l: "Today", d: 0 }, { l: "󰅂", d: 1 }]
+              Rectangle {
+                required property var modelData
+                width: modelData.d === 0 ? 70 : 44; height: 40; radius: 20
+                color: stepArea.pressed ? Color.accent : Qt.alpha(Color.popups.text, 0.10)
+                Text { anchors.centerIn: parent; text: parent.modelData.l; font.pixelSize: parent.modelData.d === 0 ? 14 : 20
+                       color: stepArea.pressed ? Color.background : Color.popups.text }
+                MouseArea { id: stepArea; anchors.fill: parent
+                            onClicked: root.monthShift = parent.modelData.d === 0 ? 0 : root.monthShift + parent.modelData.d }
+              }
+            }
+          }
+        }
+        Grid {
+          columns: 7
+          Repeater {
+            model: ["M", "T", "W", "T", "F", "S", "S"]
+            Text {
+              required property string modelData
+              width: (todayBody.width) / 7; height: 24
+              horizontalAlignment: Text.AlignHCenter
+              text: modelData
+              color: Color.popups.text
+              opacity: 0.5
+              font.pixelSize: 13
+            }
+          }
+          Repeater {
+            model: 42
+            Item {
+              required property int index
+              readonly property int day: index - todaySheet.startCol + 1
+              readonly property bool real: day >= 1 && day <= todaySheet.days
+              readonly property bool isToday: real && root.monthShift === 0 && day === root.now.getDate()
+              width: todayBody.width / 7; height: 40
+              visible: index < 35 || todaySheet.startCol + todaySheet.days > 35
+              Rectangle {
+                anchors.centerIn: parent
+                width: 34; height: 34; radius: 17
+                color: parent.isToday ? Color.accent : "transparent"
+              }
+              Text {
+                anchors.centerIn: parent
+                text: parent.real ? parent.day : ""
+                color: parent.isToday ? Color.background : Color.popups.text
+                font.pixelSize: 15
+                font.bold: parent.isToday
+              }
+            }
+          }
+        }
       }
     }
   }
@@ -3170,6 +3454,8 @@ Item {
                 { v: "scallop", l: "Scallop" }, { v: "flame", l: "Flame" }, { v: "saw", l: "Saw" }] },
             { key: "hide", title: "Slide away when idle", narrow: true, options: [
                 { v: "0", l: "Never" }, { v: "10", l: "10 s" }, { v: "30", l: "30 s" }, { v: "60", l: "1 min" }, { v: "300", l: "5 min" }] },
+            { key: "keys", title: "Key strip", options: [
+                { v: "auto", l: "For the app" }, { v: "always", l: "Always" }, { v: "off", l: "Off" }] },
             { key: "rails", title: "Rails", options: [{ v: "both", l: "Both sides" }, { v: "right", l: "Right only" }] },
             { key: "sounds", title: "Button sounds", options: [{ v: "on", l: "On" }, { v: "off", l: "Off" }] }
           ]
@@ -3177,6 +3463,7 @@ Item {
             id: sw2
             required property var modelData
             readonly property string current: modelData.key === "hide" ? String(Math.round(root.railHideMs / 1000))
+              : modelData.key === "keys" ? (["always", "off"].indexOf(root.keysPref.trim()) >= 0 ? root.keysPref.trim() : "auto")
               : modelData.key === "buttons" ? (root.buttonShapes[root.buttonsPref.trim()] !== undefined ? root.buttonsPref.trim() : "auto")
               : modelData.key === "edge"
               ? (root.edgeNames.indexOf(root.edgePref.trim()) >= 0 ? root.edgePref.trim() : "auto")
@@ -3203,7 +3490,8 @@ Item {
                   anchors.fill: parent
                   enabled: !parent.off
                   onClicked: {
-                    if (sw2.modelData.key === "buttons") root.setButtons(parent.modelData.v)
+                    if (sw2.modelData.key === "keys") root.setKeys(parent.modelData.v)
+                    else if (sw2.modelData.key === "buttons") root.setButtons(parent.modelData.v)
                     else if (sw2.modelData.key === "hide") root.setHide(parent.modelData.v)
                     else if (sw2.modelData.key === "edge") root.setEdge(parent.modelData.v)
                     else if (sw2.modelData.key === "rotation") root.setRotation(parent.modelData.v)

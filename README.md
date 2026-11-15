@@ -79,6 +79,7 @@ The order is set by how a tablet of this size is held. It has weight, so you gri
 | Settings | Opens the settings panel: look, edge shape, screen rotation, when the rails slide away, one rail or two, button sounds. |
 | Rotate | Tap to swap landscape and portrait; hold to turn the screen upside down. |
 | Stay awake | While lit: no screensaver, no auto-lock, no screen-off. Same state as the bar's mug indicator. |
+| Today | The time and date large enough to read at arm's length, the battery, and a month calendar. |
 | Brightness | A rocker: plus at the top, minus at the bottom, hold to keep going. It fills from the bottom to show the current level. |
 | Volume | The same rocker for volume; tap the speaker in the middle to mute. Uses Omarchy's own commands, so its on-screen display shows too. |
 | Back | Goes back in the focused app, as on a phone (it sends Alt+Left: back in browsers, file managers and most apps with a history); closes the app drawer or the settings panel if one is open. Hold for forward. Where the left thumb rests. |
@@ -133,7 +134,16 @@ Choose one in the settings panel (the cog at the top of the left rail), or with 
 
 **Slide away.** `tablet-mode hide 30` (or "Slide away when idle" in the settings panel) slides the rails and the bottom bezel off their edges after that many seconds without a touch, and gives the windows the space; the next touch anywhere brings them back. Not while you are dictating or in the settings. `tablet-mode hide 0`, the default, keeps them in place.
 
-**Load.** Two meters in the bottom bezel show how hard the machine is working: processor on the left half, memory on the right, each with its percentage. They turn the look's warning colour above 85%.
+**The key strip.** Without a keyboard, the keys an app wants all the time are a whole on-screen keyboard away. So the bottom bezel grows a row of them, chosen by what has focus:
+
+| Focused | Keys |
+|---|---|
+| A terminal | Esc, Tab, Shift+Tab, Ctrl+C, the four arrows, 1 2 3, / |
+| A browser | Previous tab, next tab, new tab, close tab, reopen closed tab, reload, address bar, find, smaller text, larger text |
+
+It appears with those apps and goes away with others (`tablet-mode keys auto`, the default); `always` keeps it up everywhere, `off` never shows it. It takes 36 px of height while it is up.
+
+**Load.** Three meters in the bottom bezel: processor, memory and battery, each with its percentage. Processor and memory turn the look's warning colour above 85%, the battery below 15%. With the key strip up they shrink to small plates at its ends.
 
 **Button sounds.** `tablet-mode sounds on` (or the settings panel) plays a soft tap as a button goes down. Off by default. The mic never makes one: it would be the first thing your dictation hears.
 
