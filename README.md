@@ -168,20 +168,20 @@ It is also the keyboard on the lock screen: touch a locked tablet and it comes u
 
 ### Terminals
 
-Ghostty does little useful with a finger. With its scrollbar on, a touch drag scrolls one line per pixel; with it off, a drag does nothing; it never selects text by touch. So the installer turns the scrollbar off and the gesture daemon supplies both, as ordinary mouse input:
+A terminal is a mouse program. Given a finger, Ghostty treats it as a mouse button going down wherever the pointer last was: a tap lands in the wrong place, and a scroll drags a selection behind it. A program that reads the mouse itself (herdr, tmux, anything with tabs to tap) makes both worse.
+
+So terminals never get the finger. The shell plugin keeps a see-through surface over every terminal window, which takes each touch; the gesture service, which reads the panel directly, works out what the touch meant and sends that as clean pointer events, lifting the surface aside for the moment it takes.
 
 | Gesture over a terminal | Does |
 |---|---|
-| The rail's scroll strip | Scrolls, like a wheel, with a fling. The way to scroll a terminal. |
-| Hold, then drag, then lift | Selects from where you held to where you lifted. The Copy / Paste menu appears beside it. |
-| Drag that starts sideways | Selects, without the hold. |
-| Two fingers up / down | Scrolls. |
+| Tap | A click exactly there: tabs, panes and buttons in a terminal program work. |
+| Drag up / down, one finger or two | Scrolls, with a fling. Nothing is selected. |
+| Drag that starts sideways | Selects from where it started to where it lifted. The Copy / Paste menu appears beside it. |
+| Hold, then drag, then lift | Selects, whichever way you drag. |
+| Hold still | The Copy / Paste / Select all menu. |
+| The rail's scroll strip | Scrolls the focused terminal without touching it. |
 
-A one-finger drag on the terminal can scroll it too (`TABLET_GESTURES_ONE_FINGER_SCROLL=1` for the gesture service), but it is off: the terminal treats the resting finger as a held mouse button, so text scrolling under it gets selected.
-
-The selection is highlighted when you lift, not while you drag. GTK gives a widget's click gesture to one input at a time, so the terminal ignores mouse input for as long as a finger rests on it; the drag is played to it once the finger is up.
-
-Terminals recognised: Ghostty, foot, Alacritty, kitty, WezTerm (`TABLET_GESTURES_SCROLL_CLASSES` to change). The scrollbar setting and the measurements are Ghostty's; the others are untested.
+The selection appears when the finger lifts, not under it as it moves. A terminal with another window floating over it, or a fullscreen one, is left uncovered and behaves as Ghostty does by itself. `TABLET_GESTURES_COVER=0` in the gesture service's environment turns the cover off.
 
 ### Rotation
 

@@ -317,6 +317,56 @@ Item {
     onLoadFailed: root.topbarPref = "hide"
   }
 
+  // THE TERMINAL SHIELD. A terminal is a mouse program: it takes a finger as
+  // a mouse button going down wherever the pointer last was, so a tap lands in
+  // the wrong place and a scroll drags a selection behind it. So terminals do
+  // not get the finger at all. This is a see-through surface over the terminal
+  // windows that takes every touch on them, and bin/tablet-gestures (which
+  // reads the panel itself) turns the touch into what was meant, sent as clean
+  // pointer events: a tap is a click, a drag up or down is the wheel, a held
+  // drag is a selection. The daemon writes the rectangles to cover in
+  // $XDG_RUNTIME_DIR/tablet-mode/shield, one "x y w h" a line, and empties the
+  // file while it is sending pointer events of its own, which must pass
+  // through. A touch that began on the shield stays the shield's until it
+  // lifts, so emptying it mid-touch does not hand the finger to the terminal.
+  property var shieldRects: []
+  function shieldRect(i, k) { return i < shieldRects.length ? shieldRects[i][k] : 0 }
+  FileView {
+    path: Quickshell.env("XDG_RUNTIME_DIR") + "/tablet-mode/shield"
+    watchChanges: true
+    printErrors: false
+    onFileChanged: reload()
+    onLoaded: {
+      var out = [], lines = text().split("\n")
+      for (var i = 0; i < lines.length; i++) {
+        var n = lines[i].trim().split(/\s+/).map(Number)
+        if (n.length === 4 && n[2] > 0 && n[3] > 0) out.push(n)
+      }
+      root.shieldRects = out
+    }
+    onLoadFailed: root.shieldRects = []
+  }
+  PanelWindow {
+    id: shieldWin
+    visible: root.noKeyboard
+    screen: Quickshell.screens.length > 0 ? Quickshell.screens[0] : null
+    color: "transparent"
+    WlrLayershell.namespace: "omarchy-tablet-shield"
+    WlrLayershell.layer: WlrLayer.Top
+    WlrLayershell.keyboardFocus: WlrKeyboardFocus.None
+    exclusionMode: ExclusionMode.Ignore
+    anchors { top: true; bottom: true; left: true; right: true }
+    mask: Region {
+      Region { x: root.shieldRect(0, 0); y: root.shieldRect(0, 1); width: root.shieldRect(0, 2); height: root.shieldRect(0, 3) }
+      Region { x: root.shieldRect(1, 0); y: root.shieldRect(1, 1); width: root.shieldRect(1, 2); height: root.shieldRect(1, 3) }
+      Region { x: root.shieldRect(2, 0); y: root.shieldRect(2, 1); width: root.shieldRect(2, 2); height: root.shieldRect(2, 3) }
+      Region { x: root.shieldRect(3, 0); y: root.shieldRect(3, 1); width: root.shieldRect(3, 2); height: root.shieldRect(3, 3) }
+      Region { x: root.shieldRect(4, 0); y: root.shieldRect(4, 1); width: root.shieldRect(4, 2); height: root.shieldRect(4, 3) }
+      Region { x: root.shieldRect(5, 0); y: root.shieldRect(5, 1); width: root.shieldRect(5, 2); height: root.shieldRect(5, 3) }
+    }
+    MouseArea { anchors.fill: parent }             // takes the touch; does nothing with it
+  }
+
   // THE RAILS ARE ON TOP. Omarchy's panels (Wi-Fi, Bluetooth, power, the
   // menus) are full-screen Overlay surfaces that close on a touch outside
   // their card. On the Top layer the rails were under them, so reaching for

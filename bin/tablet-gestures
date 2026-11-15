@@ -449,6 +449,132 @@ class Shield:
 SHIELD = Shield()
 
 
+class Cover:
+    """The see-through surface the shell plugin keeps over terminal windows
+    (THE TERMINAL SHIELD in tablet.rail's Main.qml). A terminal takes a finger
+    as a mouse button going down wherever the pointer last was: a tap lands in
+    the wrong place (measured 2026-11-15: every tap arrived at cell 1;1), and a
+    scroll drags a selection behind it; a program that reads the mouse itself
+    (herdr, tmux) makes both worse. With the cover up the terminal never gets
+    the finger. This daemon reads the panel regardless, works out what the
+    touch meant, lowers the cover and sends that as pointer events.
+
+    Measured the same day: with the cover up a tap reaches nothing; with a
+    finger still down, lowering it lets a pointer click through at the right
+    cell, and the finger stays the cover's until it lifts.
+
+    The rectangles go to $XDG_RUNTIME_DIR/tablet-mode/shield, one "x y w h" a
+    line; an empty file is "lowered". TABLET_GESTURES_COVER=0 turns it off, and
+    everything falls back to the older handling."""
+
+    SETTLE = 0.09            # s from emptying the file to the surface letting go
+    EVERY = 0.5              # s between looks at where the terminals are
+
+    def __init__(self):
+        self.on = not DRY and os.environ.get("TABLET_GESTURES_COVER", "1") != "0"
+        self.rects, self.mon = [], {}
+        self.lowered = 0     # how many senders want it down
+        self.since = 0.0     # when it last went down
+        self.written = None
+        self.lock = threading.Lock()
+
+    def _write(self, rects):
+        text = "".join("%d %d %d %d\n" % r for r in rects)
+        if text == self.written:
+            return
+        self.written = text
+        try:
+            os.makedirs(RUN_DIR, exist_ok=True)
+            # In place, not write-and-rename: the plugin watches this file.
+            with open(os.path.join(RUN_DIR, "shield"), "w") as f:
+                f.write(text)
+        except OSError:
+            pass
+
+    def find(self):
+        """Where the terminals are on the screen's workspace: every terminal
+        window that is tiled or floating with nothing else over it. One with
+        another window on top is left out (the cover is above all windows and
+        would take that window's touches), as is a fullscreen one (the cover's
+        layer is not drawn over those)."""
+        mon = monitor()
+        ws = (mon.get("activeWorkspace") or {}).get("id")
+        here = [c for c in json.loads(hyprctl("clients", "-j") or "[]")
+                if (c.get("workspace") or {}).get("id") == ws and c.get("mapped", True) and not c.get("hidden")]
+        if any(int(c.get("fullscreen") or 0) == 2 for c in here):
+            return mon, []
+        out = []
+        for c in here:
+            if (c.get("class") or "").lower() not in SCROLL_CLASSES:
+                continue
+            x, y, w, h = *c["at"], *c["size"]
+            over = [o for o in here if o is not c and (o.get("floating") or int(o.get("fullscreen") or 0))
+                    and o["at"][0] < x + w and o["at"][0] + o["size"][0] > x
+                    and o["at"][1] < y + h and o["at"][1] + o["size"][1] > y]
+            if not over or c.get("floating") and all(not o.get("floating") for o in over):
+                out.append((x, y, w, h))
+        return mon, out[:6]
+
+    def refresh(self):
+        if not self.on:
+            return
+        try:
+            mon, rects = self.find()
+        except (OSError, ValueError, KeyError, TypeError, subprocess.SubprocessError):
+            return
+        with self.lock:
+            self.mon, self.rects = mon, rects
+            if not self.lowered:
+                self._write(rects)
+
+    def watch(self):
+        while True:
+            self.refresh()
+            time.sleep(self.EVERY)
+
+    def covers(self, px, py):
+        """Whether a finger at normalised panel (px, py) lands on the cover."""
+        if not self.on or not self.rects or self.lowered:
+            return False
+        x, y = to_layout(px, py, self.mon)
+        return inside((x, y), self.rects)
+
+    def lower(self):
+        if not self.on:
+            return
+        with self.lock:
+            self.lowered += 1
+            if self.lowered == 1:
+                self.since = time.time()
+                self._write([])
+
+    def ready(self):
+        """Whether pointer events sent now would pass (it takes a moment)."""
+        return not self.on or (self.lowered > 0 and time.time() - self.since >= self.SETTLE)
+
+    def wait(self):
+        left = self.SETTLE - (time.time() - self.since)
+        if self.on and self.lowered and left > 0:
+            time.sleep(left)
+
+    def lift(self):
+        """Put it back (the opposite of lower)."""
+        if not self.on:
+            return
+        with self.lock:
+            self.lowered = max(0, self.lowered - 1)
+            if not self.lowered:
+                self._write(self.rects)
+
+    def reset(self):
+        self.lowered = 0
+        self.written = None
+        self._write([])
+
+
+COVER = Cover()
+
+
 def monitor():
     """The touchscreen's monitor as Hyprland sees it (the internal panel)."""
     try:
@@ -600,7 +726,9 @@ class Select:
             return
         (ox, oy), steps = self.origin, 4
         down = False
+        COVER.lower()                       # (no-op unless the cover is in use)
         try:
+            COVER.wait()
             time.sleep(0.06)                # let the terminal see the touch end
             self._move(ox, oy)
             time.sleep(0.03)                # ...and the pointer arrive
@@ -617,6 +745,7 @@ class Select:
                     self._button("0x80")    # left button up, whatever happened
                 except (OSError, subprocess.SubprocessError):
                     pass
+            COVER.lift()
 
 
 SELECT = Select()
@@ -671,23 +800,30 @@ class Fling:
         self.stop = threading.Event()
         self.thread = None
 
-    def start(self, velocity):
+    def start(self, velocity, done=None):
+        """`done` is called once, when the fling has ended or was too slow to start."""
         self.cancel()
         if abs(velocity) < FLING_MIN:
+            if done:
+                done()
             return
         self.stop = threading.Event()
-        self.thread = threading.Thread(target=self._run, args=(velocity, self.stop), daemon=True)
+        self.thread = threading.Thread(target=self._run, args=(velocity, self.stop, done), daemon=True)
         self.thread.start()
 
     def cancel(self):
         self.stop.set()
 
     @staticmethod
-    def _run(velocity, stop):
-        for owed in fling_steps(velocity):
-            if stop.wait(FLING_TICK):
-                return
-            wheel(owed)
+    def _run(velocity, stop, done=None):
+        try:
+            for owed in fling_steps(velocity):
+                if stop.wait(FLING_TICK):
+                    return
+                wheel(owed)
+        finally:
+            if done:
+                done()
 
 
 FLING = Fling()
@@ -698,19 +834,27 @@ class Scroll:
     Decides once whether the window under the fingers is a terminal, then
     turns vertical travel into wheel notches as it happens."""
 
-    def __init__(self, cx, cy, when, fingers=(), settle=SCROLL_SETTLE, shield=True):
+    def __init__(self, cx, cy, when, fingers=(), settle=SCROLL_SETTLE, shield=True, cover=False):
         self.cx, self.cy, self.when = cx, cy, when     # centroid at start (normalised panel)
         self.fingers = list(fingers)                   # each finger at start (normalised panel)
         self.settle = settle
         self.mon = monitor()
         self.emitted = 0
         self.samples = []                              # (time, vertical travel) for the fling
+        self.spot = (0, 0)                             # layout point the wheel is aimed at
+        self.through = False                           # the pointer has been handed past the cover
         # Decided the moment the second finger lands, so the terminal can be
         # shielded before the first finger's drag has selected anything.
         self.allowed = self.aim()
         # Two fingers only. One finger over a terminal needs no shield: the
         # terminal ignores the touch (see TERMINALS in the header).
-        if self.allowed and shield:
+        # `cover`: the fingers are on the cover, so the terminal has not seen
+        # them and there is nothing to shield; the cover steps aside instead,
+        # for the wheel, until the scroll (and its fling) is over.
+        self.cover = cover and self.allowed
+        if self.cover:
+            COVER.lower()
+        elif self.allowed and shield:
             SHIELD.up(when)
 
     def update(self, cx, cy, now):
@@ -719,6 +863,19 @@ class Scroll:
         _, uy = to_user(cx - self.cx, cy - self.cy, self.mon.get("transform") or 0)
         self.samples.append((now, uy))
         del self.samples[:-40]
+        if self.cover and not self.through:
+            if not COVER.ready():
+                return                                 # not let go yet: the travel is owed, not lost
+            # The pointer was put here while the cover was up, so it is still
+            # the cover's (measured: the wheel went nowhere). Moving it again,
+            # for real, hands it to the terminal now underneath.
+            self.through = True
+            try:
+                hyprctl("dispatch", f"hl.dsp.cursor.move({{ x = {self.spot[0]}, y = {self.spot[1]} }})")
+                subprocess.run(["ydotool", "mousemove", "-x", "1", "-y", "1"], stdout=subprocess.DEVNULL,
+                               stderr=subprocess.DEVNULL, timeout=2)
+            except (OSError, subprocess.SubprocessError):
+                pass
         owed = wheel_notches(uy, self.emitted)
         if not owed:
             return
@@ -727,7 +884,9 @@ class Scroll:
 
     def release(self):
         """The fingers lifted: carry on if they were still moving."""
-        if self.allowed:
+        if self.cover:
+            FLING.start(fling_velocity(self.samples), done=COVER.lift)
+        elif self.allowed:
             FLING.start(fling_velocity(self.samples))
 
     def aim(self):
@@ -752,6 +911,7 @@ class Scroll:
             win = window_at((x, y), json.loads(hyprctl("clients", "-j") or "[]"), ws)
             if not win or (win.get("class") or "").lower() not in SCROLL_CLASSES:
                 return False
+            self.spot = (x, y)
             hyprctl("dispatch", f"hl.dsp.cursor.move({{ x = {x}, y = {y} }})")
         except (OSError, ValueError, KeyError, TypeError, subprocess.SubprocessError):
             return False
@@ -764,11 +924,13 @@ def run(node):
         (_, xr), (_, yr) = axis_range(fd, ABS_MT_POSITION_X), axis_range(fd, ABS_MT_POSITION_Y)
         slot = 0
         pos = {}          # slot -> [x, y] for fingers currently down
+        last = {}         # slot -> (x, y) last reported, across touches
         start = {}        # slot -> (x0, y0, x_now, y_now) for this touch sequence
         peak = 0          # most fingers down at once in this sequence
         scroll = None     # the two-finger drag in progress, if any
         marked = None     # when the touch mark was last refreshed
         recent = []       # normalised points where the last few touches began
+        covered = False   # this touch began on the terminal cover (see Cover)
         touched = None    # when a finger was last seen on the glass
         began = None      # wall-clock start of this touch sequence
         pressed = False   # the long press of this sequence has fired
@@ -801,11 +963,17 @@ def run(node):
                         if value == -1:
                             pos.pop(slot, None)
                         else:
-                            pos[slot] = [None, None]
+                            # Start from where this slot last was: the kernel
+                            # does not send an axis whose value is unchanged,
+                            # so a touch landing on the very row (or column)
+                            # the last one left would otherwise never be seen.
+                            pos[slot] = list(last.get(slot, (None, None)))
                     elif code == ABS_MT_POSITION_X and slot in pos:
                         pos[slot][0] = value
+                        last[slot] = (value, last.get(slot, (None, None))[1])
                     elif code == ABS_MT_POSITION_Y and slot in pos:
                         pos[slot][1] = value
+                        last[slot] = (last.get(slot, (None, None))[0], value)
                 elif etype == EV_SYN and code == 0:
                     now = sec + usec / 1e6
                     down = {s: p for s, p in pos.items() if p[0] is not None and p[1] is not None}
@@ -819,6 +987,7 @@ def run(node):
                         write_run("touch-down", f"{began:.3f}\n")   # tablet-touch: ends the mic focus lock
                         x, y = next(iter(down.values()))
                         MENU.touch(x / xr, y / yr)
+                        covered = COVER.covers(x / xr, y / yr)
                         # Where the last few touches began: tablet-touch aims the
                         # scroll strip at a panel by the last touch that was on it.
                         recent = ([(x / xr, y / yr)] + recent)[:4]
@@ -842,9 +1011,11 @@ def run(node):
                             want = "select" if pressed else one_finger_intent(
                                 *to_user((x1 - x0) / xr, (y1 - y0) / yr, transform()))
                             one = "other"
-                            if want == "scroll" and ONE_FINGER_SCROLL:
+                            # On the cover one finger scrolls: the terminal
+                            # does not see it, so nothing is selected.
+                            if want == "scroll" and (ONE_FINGER_SCROLL or covered):
                                 scroll = Scroll(x0 / xr, y0 / yr, now, [(x0 / xr, y0 / yr)],
-                                                settle=0, shield=False)
+                                                settle=0, shield=False, cover=covered)
                                 if scroll.allowed:
                                     one = "scroll"
                                 else:
@@ -863,7 +1034,8 @@ def run(node):
                         cx = sum(p[0] for p in down.values()) / 2 / xr
                         cy = sum(p[1] for p in down.values()) / 2 / yr
                         if scroll is None:
-                            scroll = Scroll(cx, cy, now, [(p[0] / xr, p[1] / yr) for p in down.values()])
+                            scroll = Scroll(cx, cy, now, [(p[0] / xr, p[1] / yr) for p in down.values()],
+                                            cover=covered)
                         else:
                             scroll.update(cx, cy, now)
                     elif peak > 2:
@@ -871,6 +1043,8 @@ def run(node):
                         # shield already raised (fingers over a terminal) stays
                         # up until they lift; none is raised here — see the
                         # GHOST FINGERS note in the header.
+                        if scroll is not None and scroll.cover:
+                            COVER.lift()               # it was lowered for the scroll this is not
                         scroll = None
                     SHIELD.expire(now)
 
@@ -890,7 +1064,7 @@ def run(node):
                             if (one is None and not pressed and not selecting and began is not None
                                     and time.time() - began < LONGPRESS
                                     and abs(x1 - x0) / xr <= ONE_FINGER_SLOP and abs(y1 - y0) / yr <= ONE_FINGER_SLOP):
-                                tap_terminal(x1 / xr, y1 / yr)
+                                tap_terminal(x1 / xr, y1 / yr, covered)
                             if one == "select":
                                 SELECT.end(x1 / xr, y1 / yr)
                             # A selection just ended (ours in a terminal, the
@@ -900,25 +1074,31 @@ def run(node):
                         SELECT.end()                       # never leave the button down
                         start, peak, scroll = {}, 0, None
                         began, pressed, selecting, one = None, False, False, None
+                        covered = False
                         SHIELD.down()
+                        COVER.refresh()
     finally:
         SELECT.end()
         SHIELD.reset()
         os.close(fd)
 
 
-def tap_terminal(px, py):
+def tap_terminal(px, py, covered=False):
     """A finger tapped at normalised panel (px, py). If a terminal is there,
     click it with the pointer at that spot.
 
     Ghostty does pass a touch tap to a program that asked for the mouse (herdr,
-    tmux, htop, a TUI with tabs), but as a click at cell 1;1, wherever the
-    finger was: its click handler reads the pointer's position, and a touch
-    does not move the pointer. (Measured 2026-11-15: a tap mid-window arrived
-    as `ESC[<0;1;1M`, with the pointer inside the window or out of it.) So the
-    tap did nothing, or pressed whatever is in the top-left corner. A real
-    click after the touch has ended lands where the finger was. The 1;1 click
-    still happens first; nothing here can take it back."""
+    tmux, htop, a TUI with tabs), but as a click wherever the pointer last was,
+    not where the finger is: its click handler reads the pointer's position,
+    and a touch does not move the pointer. (Measured 2026-11-15: a tap
+    mid-window arrived as `ESC[<0;1;1M`.) A pointer click lands where the
+    finger was.
+
+    `covered`: the tap was on the cover (see Cover), so the terminal saw
+    nothing and this click is the only one. Otherwise the terminal's own stray
+    click has already happened and cannot be taken back; the pointer is then
+    left in the window's corner so that the NEXT stray click is at 1;1 and not
+    on the last thing tapped (tap "new tab", tap elsewhere: two new tabs)."""
     if DRY:
         return
     try:
@@ -926,18 +1106,22 @@ def tap_terminal(px, py):
         if terminal_at(px, py, mon) is None:
             return
         x, y = to_layout(px, py, mon)
-        if inside((x, y), ignored_rects(json.loads(hyprctl("layers", "-j") or "{}"))):
-            return
-        time.sleep(0.06)                    # let the terminal see the touch end
-        hyprctl("dispatch", f"hl.dsp.cursor.move({{ x = {x}, y = {y} }})")
-        time.sleep(0.03)
-        subprocess.run(["ydotool", "click", "0xC0"], stdout=subprocess.DEVNULL,
-                       stderr=subprocess.DEVNULL, timeout=2)
-        # Then put the pointer in the window's top-left corner. Left where it
-        # is, the NEXT tap's stray click lands here again (the terminal uses
-        # the pointer's last place in the window, even after it has left): tap
-        # "new tab", tap anywhere else, and there were two new tabs. From the
-        # corner the stray click is at 1;1, as it was before any of this.
+        if covered:
+            COVER.lower()
+            COVER.wait()
+        else:
+            time.sleep(0.06)                # let the terminal see the touch end
+        try:
+            hyprctl("dispatch", f"hl.dsp.cursor.move({{ x = {x}, y = {y} }})")
+            time.sleep(0.03)
+            subprocess.run(["ydotool", "click", "0xC0"], stdout=subprocess.DEVNULL,
+                           stderr=subprocess.DEVNULL, timeout=2)
+            if covered:
+                time.sleep(0.04)            # the click, through, before the cover is back
+                return
+        finally:
+            if covered:
+                COVER.lift()
         time.sleep(0.05)
         ws = (mon.get("activeWorkspace") or {}).get("id")
         win = window_at((x, y), json.loads(hyprctl("clients", "-j") or "[]"), ws)
@@ -955,6 +1139,8 @@ def main():
     import signal
 
     atexit.register(SHIELD.reset)
+    atexit.register(COVER.reset)
+    threading.Thread(target=COVER.watch, daemon=True).start()
     atexit.register(SELECT.end)
     signal.signal(signal.SIGTERM, lambda *_: sys.exit(0))   # run atexit on systemd stop
     SHIELD.reset()          # a previous run may have died mid-gesture
