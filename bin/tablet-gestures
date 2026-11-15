@@ -1,0 +1,912 @@
+#!/usr/bin/env python3
+"""tablet-gestures — multi-finger touchscreen swipes, without a compositor plugin.
+
+    three fingers left / right   next / previous workspace
+    three fingers up             app launcher
+    three fingers down           next window on this workspace
+    four fingers up              maximise the focused window (the bar stays)
+    four fingers down            restore it
+    one finger, in a terminal    drag up / down scrolls (and flings);
+                                 hold, then drag, selects text;
+                                 a drag that starts sideways selects at once
+    two fingers up / down        scroll, in terminals
+
+TERMINALS. Ghostty 1.4 does nothing useful with a finger on its own. With its
+scrollbar on, a touch drag scrolls ONE LINE PER PIXEL — a 200 px drag is 200
+lines, measured — and with it off (`scrollbar = never`, which install.sh
+sets and this relies on) a drag does nothing at all. It never
+selects text by touch. So over a terminal this daemon supplies both, as real
+mouse input, which the terminal handles perfectly well:
+
+  scroll   a one-finger drag that starts vertically becomes wheel notches, as
+           far as the finger moved; lifting while moving flings, the next
+           touch stops it.
+  select   hold still for LONGPRESS seconds (the Copy / Paste menu appearing
+           is the sign), then drag to where the selection should end and
+           lift. On lift the same drag is played to the terminal with the
+           mouse, the text highlights, and the menu returns beside it. A drag
+           that starts sideways selects without the wait. The highlight
+           cannot follow the finger live: see class Select.
+
+Nothing is shielded for this: the terminal does nothing with the touch, so
+there is no touch to take back from it (compare GHOST FINGERS below, which is
+why an earlier version — shield the touchscreen mid-drag — corrupted the
+terminal's next selection).
+
+Hyprland's `gesture` config is touchpad-only, and the old answer (hyprgrass) is
+a compiled plugin that must be rebuilt against every Hyprland release — the
+reason the Omarchy 3 touch gestures died. This reads the touchscreen's raw
+multitouch stream instead (the user is in `input`) and calls hyprctl, so there
+is nothing to rebuild.
+
+A gesture is: exactly three (or four) fingers down at some point, and by the
+time the last finger lifts their average travel is past the threshold along one
+axis and clearly dominant over the other (DOMINANCE), so a sloppy workspace
+swipe is not read as an up or down one. Four fingers only act up/down.
+
+LONG PRESS. One finger held still for LONGPRESS seconds asks the shell plugin
+for a small Copy / Paste menu next to the finger (bin/tablet-touch does the
+work). Browsers are skipped: they bring their own long-press menu.
+
+FOCUS HISTORY. A thread follows Hyprland's event socket and keeps the current
+and previous focused window in $XDG_RUNTIME_DIR/tablet-mode/focus. Touching a
+layer surface (the mic button) can move focus to the window underneath it;
+bin/tablet-touch uses the history to put the dictation back where it started.
+
+LOCK SCREEN. With no keyboard attached the lock screen cannot be typed into,
+so the first touch after a pause runs `tablet-osk lock-watch`, which puts the
+on-screen keyboard over the lock screen if (and only while) it is locked.
+
+SHIELDING. The fingers of a gesture would otherwise also reach the app under
+them: the first finger of a two-finger scroll is a mouse press to a terminal, so
+the drag SELECTS TEXT while we scroll. So while such a gesture is in progress
+the touchscreen is switched off in
+Hyprland (`hl.device({ name, enabled = false })`) — this daemon reads the panel
+directly and keeps tracking — and switched back on when the last finger lifts.
+The shield is raised ONLY when the fingers are over a terminal, and never
+elsewhere. The shield is always dropped on exit, on start, and after SHIELD_MAX
+seconds, so touch cannot be left dead.
+
+GHOST FINGERS (2026-11-09). Shielding every three-finger swipe was tried and
+broke Chrome's zoom: switching the device off mid-touch does not send the app a
+"finger up" for touches it has already seen, so Chrome kept two phantom fingers
+down and read the next touch as a pinch against them. Touch-aware apps must
+therefore never be shielded mid-touch; the cost is that a swipe's fingers still
+reach them (a swipe started on a video can tap it).
+
+Runs as a user service (systemd/user/tablet-gestures.service).
+TABLET_GESTURES_DRYRUN=1 prints actions instead of running them.
+"""
+import fcntl
+import glob
+import json
+import math
+import os
+import select
+import socket
+import struct
+import subprocess
+import sys
+import threading
+import time
+
+EV_SYN, EV_ABS = 0, 3
+ABS_MT_SLOT, ABS_MT_POSITION_X, ABS_MT_POSITION_Y, ABS_MT_TRACKING_ID = 47, 53, 54, 57
+EVENT = struct.Struct("llHHi")
+# fingers -> the swipe directions (as the user sees them) that mean something
+GESTURES = {3: ("left", "right", "up", "down"), 4: ("up", "down")}
+THRESHOLD = float(os.environ.get("TABLET_GESTURES_THRESHOLD", "0.08"))  # of the axis range
+DOMINANCE = 1.6          # main axis must beat the other by this much
+SCROLL_STEP = float(os.environ.get("TABLET_GESTURES_SCROLL_STEP", "0.018"))  # screen height per wheel notch
+SCROLL_SETTLE = 0.09     # s two fingers must be down first — a third may still be landing
+# One finger over a terminal: travel (of each axis) before a drag is read as
+# scroll or select, and how much the vertical part must beat the sideways part
+# to be a scroll.
+ONE_FINGER_SLOP = 0.012
+ONE_FINGER_DOMINANCE = 1.2
+# Fling: speed is measured over the last FLING_WINDOW seconds of the drag, must
+# be at least FLING_MIN notches/s to carry on, decays with time constant
+# FLING_TAU and stops below FLING_STOP notches/s or after FLING_MAX seconds.
+FLING_WINDOW, FLING_MIN, FLING_STOP, FLING_CAP = 0.10, 12.0, 3.0, 220.0
+FLING_TAU, FLING_MAX, FLING_TICK = 0.33, 3.0, 0.016
+# Windows that get two-finger scrolling: terminals, which treat touch as a mouse
+# drag (text selection) instead of scrolling. Touch-aware apps are left alone.
+SCROLL_CLASSES = set(os.environ.get(
+    "TABLET_GESTURES_SCROLL_CLASSES",
+    "com.mitchellh.ghostty,foot,footclient,alacritty,kitty,org.wezfurlong.wezterm").lower().split(","))
+SHIELD_MAX = 8.0         # s; a shield older than this is dropped no matter what
+DRY = os.environ.get("TABLET_GESTURES_DRYRUN") == "1"
+# Touched whenever a finger is on the glass (at most once a second). The
+# floating buttons watch it: they hide after 30 s without a touch, so
+# they are out of the way of a film, and come back on the next one.
+TOUCH_MARK = os.path.join(os.environ.get("XDG_RUNTIME_DIR", "/tmp"), "tablet-mode", "touch")
+TOUCH_MARK_EVERY = 1.0
+# A touch after this long without one starts a new "burst": the moment to check
+# whether the lock screen needs a keyboard (one process spawn, so not per touch).
+BURST_GAP = 4.0
+STATE_FILE = os.path.join(os.environ.get("XDG_STATE_HOME", os.path.expanduser("~/.local/state")),
+                          "tablet-mode", "state")
+BIN = os.path.expanduser("~/.local/bin/")
+
+
+RUN_DIR = os.path.join(os.environ.get("XDG_RUNTIME_DIR", "/tmp"), "tablet-mode")
+
+# ── long press ───────────────────────────────────────────────────────────────
+LONGPRESS = float(os.environ.get("TABLET_GESTURES_LONGPRESS", "0.45"))  # s held
+LONGPRESS_SLOP = 0.012     # of each axis: further than this and it is a drag
+LONGPRESS_FILE = os.path.join(RUN_DIR, "longpress")
+MENU_W, MENU_H = 252, 56   # layout px; must match the plugin's menu (Main.qml)
+MENU_GAP = 34              # menu sits this far above the finger
+# Apps with a long-press menu of their own (substring of the window class).
+NATIVE_LONGPRESS = tuple(os.environ.get(
+    "TABLET_GESTURES_NATIVE_LONGPRESS", "chrome,chromium,brave,firefox,zen,vivaldi").lower().split(","))
+
+
+def is_long_press(held, dx, dy, fired, hold=LONGPRESS, slop=LONGPRESS_SLOP):
+    """One finger, down for `held` seconds, having moved (dx, dy) of the axes."""
+    return not fired and held >= hold and abs(dx) <= slop and abs(dy) <= slop
+
+
+def menu_origin(x, y, mon):
+    """Top-left of the menu for a finger at layout (x, y): centred above the
+    finger, below it when there is no room, always wholly on the monitor."""
+    scale = float(mon.get("scale") or 1) or 1
+    w, h = float(mon.get("width") or 0) / scale, float(mon.get("height") or 0) / scale
+    if int(mon.get("transform") or 0) % 2:
+        w, h = h, w
+    mx, my = mon.get("x", 0), mon.get("y", 0)
+    left = min(max(x - MENU_W // 2, mx + 8), int(mx + w) - MENU_W - 8)
+    top = y - MENU_GAP - MENU_H
+    if top < my + 40:                       # would be under the bar: go below
+        top = y + MENU_GAP
+    return int(left), int(min(top, my + h - MENU_H - 8))
+
+
+def write_run(name, text):
+    try:
+        os.makedirs(RUN_DIR, exist_ok=True)
+        tmp = os.path.join(RUN_DIR, name + ".tmp")
+        with open(tmp, "w") as f:
+            f.write(text)
+        os.replace(tmp, os.path.join(RUN_DIR, name))
+    except OSError:
+        pass
+
+
+class Menu:
+    """The long-press menu, as far as this daemon knows about it."""
+
+    def __init__(self):
+        self.rect = None
+
+    def show(self, px, py):
+        """Finger at normalised panel (px, py). True if a menu was asked for."""
+        if DRY:
+            print("LONGPRESS", flush=True)
+            return True
+        try:
+            mon = monitor()
+            x, y = to_layout(px, py, mon)
+            if inside((x, y), ignored_rects(json.loads(hyprctl("layers", "-j") or "{}"))):
+                return False
+            ws = (mon.get("activeWorkspace") or {}).get("id")
+            win = window_at((x, y), json.loads(hyprctl("clients", "-j") or "[]"), ws)
+            cls = ((win or {}).get("class") or "").lower()
+            if not win or any(n and n in cls for n in NATIVE_LONGPRESS):
+                return False
+            left, top = menu_origin(x, y, mon)
+            self.rect = (left, top, MENU_W, MENU_H)
+            write_run("longpress", json.dumps({
+                "show": True, "x": left - mon.get("x", 0), "y": top - mon.get("y", 0),
+                "address": win.get("address", ""), "terminal": cls in SCROLL_CLASSES,
+                "at": time.time()}))
+            return True
+        except (OSError, ValueError, KeyError, TypeError, subprocess.SubprocessError):
+            return False
+
+    def hide(self):
+        """Take the menu away (the held finger started to drag a selection)."""
+        if self.rect is not None:
+            self.rect = None
+            write_run("longpress", json.dumps({"show": False, "at": time.time()}))
+
+    def touch(self, px, py):
+        """A new touch began at (px, py): one outside the menu dismisses it."""
+        if self.rect is None:
+            return
+        try:
+            if inside(to_layout(px, py, monitor()), [self.rect]):
+                return
+        except (OSError, ValueError, TypeError, subprocess.SubprocessError):
+            pass
+        self.rect = None
+        write_run("longpress", json.dumps({"show": False, "at": time.time()}))
+
+
+MENU = Menu()
+
+
+# ── focus history ────────────────────────────────────────────────────────────
+def focus_step(history, address, now):
+    """History after focus moved to `address`: {"current": [addr, since],
+    "previous": [...]}. Focus on nothing (empty address) is not recorded, and
+    neither is a repeat of the current window."""
+    current = history.get("current")
+    if not address or (current and current[0] == address):
+        return history
+    return {"current": [address, now], "previous": current}
+
+
+def follow_focus():
+    sig = os.environ.get("HYPRLAND_INSTANCE_SIGNATURE", "")
+    path = os.path.join(os.environ.get("XDG_RUNTIME_DIR", "/tmp"), "hypr", sig, ".socket2.sock")
+    history = {}
+    while True:
+        try:
+            win = json.loads(hyprctl("activewindow", "-j") or "{}")
+            history = focus_step(history, win.get("address", ""), time.time())
+            write_run("focus", json.dumps(history))
+            with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as sock:
+                sock.connect(path)
+                buf = b""
+                while True:
+                    data = sock.recv(4096)
+                    if not data:
+                        break
+                    buf += data
+                    *lines, buf = buf.split(b"\n")
+                    for line in lines:
+                        if line.startswith(b"activewindowv2>>"):
+                            addr = line[16:].decode("ascii", "ignore").strip()
+                            new = focus_step(history, "0x" + addr if addr else "", time.time())
+                            if new is not history:
+                                history = new
+                                write_run("focus", json.dumps(history))
+        except (OSError, ValueError, subprocess.SubprocessError):
+            pass
+        time.sleep(3)
+
+
+def burst_start(now, last, gap=BURST_GAP):
+    """Whether a touch at `now` begins a new burst, given the previous touch."""
+    return last is None or now - last >= gap
+
+
+def tablet_mode():
+    try:
+        return open(STATE_FILE).read().strip() == "tablet"
+    except OSError:
+        return False
+
+
+def lock_keyboard():
+    """Offer the on-screen keyboard to the lock screen (no-op unless locked)."""
+    if DRY or not tablet_mode():
+        return
+    try:
+        subprocess.Popen([BIN + "tablet-osk", "lock-watch"], stdin=subprocess.DEVNULL,
+                         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                         start_new_session=True)
+    except OSError:
+        pass
+
+
+def mark_due(now, last, every=TOUCH_MARK_EVERY):
+    """Whether a touch at `now` should refresh the mark last written at `last`."""
+    return last is None or now - last >= every
+
+
+def mark_touch(now):
+    try:
+        os.makedirs(os.path.dirname(TOUCH_MARK), exist_ok=True)
+        with open(TOUCH_MARK, "w") as f:
+            f.write(f"{now:.0f}\n")
+    except OSError:
+        pass
+
+
+def find_touchscreen():
+    """A real multitouch DIRECT device (not the stylus, not a virtual one)."""
+    for dev in sorted(glob.glob("/sys/class/input/event*/device")):
+        try:
+            if "/virtual/" in os.path.realpath(dev):
+                continue
+            props = int(open(f"{dev}/properties").read().strip() or "0", 16)
+            abs_bits = int(open(f"{dev}/capabilities/abs").read().strip().replace(" ", ""), 16)
+            name = open(f"{dev}/name").read().strip()
+        except (OSError, ValueError):
+            continue
+        direct = props & 0x2
+        multitouch = abs_bits >> ABS_MT_SLOT & 1 and abs_bits >> ABS_MT_POSITION_X & 1
+        if direct and multitouch and "stylus" not in name.lower():
+            return "/dev/input/" + os.path.basename(os.path.dirname(dev))
+    return None
+
+
+def axis_range(fd, axis):
+    buf = bytearray(24)
+    fcntl.ioctl(fd, 0x80184540 + axis, buf)          # EVIOCGABS(axis)
+    _, lo, hi, *_ = struct.unpack("6i", buf)
+    return lo, max(hi - lo, 1)
+
+
+def classify(dx, dy, threshold=THRESHOLD, dominance=DOMINANCE):
+    """Swipe direction from normalised travel (fractions of each axis), or None."""
+    ax, ay = abs(dx), abs(dy)
+    if ax >= threshold and ax >= ay * dominance:
+        return "left" if dx < 0 else "right"
+    if ay >= threshold and ay >= ax * dominance:
+        return "up" if dy < 0 else "down"
+    return None
+
+
+def rotate(direction, transform):
+    """Panel direction -> direction as the user sees it. Hyprland transforms
+    1-3 rotate the picture 90/180/270 degrees counter-clockwise, so the
+    picture's "up" points at the panel's left edge under transform 1 — a swipe
+    toward the panel's top is then a swipe to the user's right."""
+    order = ["up", "right", "down", "left"]
+    return order[(order.index(direction) + int(transform)) % 4] if 0 <= int(transform) <= 3 else direction
+
+
+def gesture(fingers, direction):
+    """The direction to act on for a `fingers`-finger swipe, or None."""
+    return direction if direction in GESTURES.get(fingers, ()) else None
+
+
+def hyprctl(*args):
+    return subprocess.run(["hyprctl", *args], capture_output=True, text=True, timeout=3).stdout
+
+
+def run_quiet(*argv):
+    subprocess.run(list(argv), stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=5)
+
+
+def act(direction, fingers=3):
+    if DRY:
+        print("GESTURE", fingers, direction, flush=True)
+        return
+    try:
+        if fingers == 3 and direction == "up":
+            run_quiet("omarchy-menu", "toggle", "apps")
+            return
+        if fingers == 3 and direction == "down":
+            run_quiet(BIN + "tablet-touch", "next-window")
+            return
+        if direction in ("left", "right"):
+            # Like the touchpad swipe: dragging the desktop left reveals the next one.
+            hyprctl("dispatch", f'hl.dsp.focus({{ workspace = "r{"+1" if direction == "left" else "-1"}" }})')
+            return
+        window = json.loads(hyprctl("activewindow", "-j") or "{}")
+        if not window.get("address"):
+            return
+        maximised = int(window.get("fullscreen") or 0) != 0
+        if (direction == "up") != maximised:      # up when not yet, down when it is
+            hyprctl("dispatch", 'hl.dsp.window.fullscreen({ mode = "maximized" })')
+    except (OSError, ValueError, subprocess.SubprocessError):
+        pass
+
+
+class Shield:
+    """Hide the touchscreen from Hyprland's clients for the length of a gesture."""
+
+    def __init__(self):
+        self.name = None
+        self.since = None
+
+    def device(self):
+        if self.name is None:
+            try:
+                touch = json.loads(hyprctl("devices", "-j") or "{}").get("touch") or []
+                names = [t.get("name", "") for t in touch if "stylus" not in t.get("name", "")]
+                self.name = names[0] if names else ""
+            except (OSError, ValueError, subprocess.SubprocessError):
+                self.name = ""
+        return self.name
+
+    def _set(self, enabled):
+        name = self.device()
+        if not name or DRY:
+            return
+        try:
+            hyprctl("eval", f'hl.device({{ name = "{name}", enabled = {"true" if enabled else "false"} }})')
+        except (OSError, subprocess.SubprocessError):
+            pass
+
+    def up(self, now):
+        if self.since is None:
+            self.since = now
+            self._set(False)
+
+    def down(self):
+        if self.since is not None:
+            self.since = None
+            self._set(True)
+
+    def expire(self, now):
+        if self.since is not None and now - self.since > SHIELD_MAX:
+            self.down()
+
+    def reset(self):
+        """Unconditionally give touch back (start-up, exit)."""
+        self.since = None
+        self._set(True)
+
+
+SHIELD = Shield()
+
+
+def monitor():
+    """The touchscreen's monitor as Hyprland sees it (the internal panel)."""
+    try:
+        mons = json.loads(hyprctl("monitors", "-j") or "[]")
+        for m in mons:
+            if m.get("name", "").startswith("eDP") or len(mons) == 1:
+                return m
+    except (OSError, ValueError, subprocess.SubprocessError):
+        pass
+    return {}
+
+
+def transform():
+    return int(monitor().get("transform") or 0)
+
+
+def to_user(dx, dy, t):
+    """A panel-frame vector as the user sees it under Hyprland transform t
+    (the same quarter turns as rotate(): panel-up becomes user-right at t=1)."""
+    for _ in range(int(t) % 4 if 0 <= int(t) <= 3 else 0):
+        dx, dy = -dy, dx
+    return dx, dy
+
+
+def to_layout(px, py, mon):
+    """Normalised panel point (0-1) -> layout pixel in the user's frame."""
+    t = int(mon.get("transform") or 0)
+    ux, uy = px, py
+    for _ in range(t % 4 if 0 <= t <= 3 else 0):
+        ux, uy = 1 - uy, ux
+    scale = float(mon.get("scale") or 1) or 1
+    w, h = float(mon.get("width") or 0) / scale, float(mon.get("height") or 0) / scale
+    if t % 2:
+        w, h = h, w
+    return int(mon.get("x", 0) + ux * w), int(mon.get("y", 0) + uy * h)
+
+
+def wheel_notches(travel, emitted, step=SCROLL_STEP):
+    """Wheel notches still owed for `travel` (user-frame, fraction of the
+    screen height; positive = fingers moved down) given `emitted` so far.
+    Natural scrolling: fingers down pull earlier content into view = wheel up."""
+    return int(travel / step) - emitted
+
+
+# Layer surfaces whose touches are never part of a gesture: a thumb holding the
+# floating mic button plus any other finger on the glass is not a scroll, and a
+# key held on the on-screen keyboard is not a long press.
+IGNORE_LAYERS = ("omarchy-tablet-rail", "wvkbd", "omarchy-tablet-menu")
+
+
+def ignored_rects(layers, names=IGNORE_LAYERS):
+    """(x, y, w, h) of every layer surface whose namespace matches `names`."""
+    rects = []
+    for mon in (layers or {}).values():
+        for level in (mon.get("levels") or {}).values():
+            for layer in level:
+                if any(n in (layer.get("namespace") or "") for n in names):
+                    rects.append((layer["x"], layer["y"], layer["w"], layer["h"]))
+    return rects
+
+
+def inside(point, rects):
+    x, y = point
+    return any(rx <= x < rx + w and ry <= y < ry + h for rx, ry, w, h in rects)
+
+
+def window_at(point, clients, workspace_id):
+    """The window under a layout point on the visible workspace, WITHOUT moving
+    the pointer: fullscreen first, then floating, then tiled. None if no window."""
+    hits = [c for c in clients or []
+            if (c.get("workspace") or {}).get("id") == workspace_id
+            and c.get("mapped", True) and not c.get("hidden")
+            and inside(point, [(*c["at"], *c["size"])])]
+    if not hits:
+        return None
+    return min(hits, key=lambda c: (not int(c.get("fullscreen") or 0), not c.get("floating"),
+                                    c.get("focusHistoryID", 0)))
+
+
+def one_finger_intent(ux, uy, slop=ONE_FINGER_SLOP, dominance=ONE_FINGER_DOMINANCE):
+    """What a one-finger drag that has moved (ux, uy) (user frame, fraction of
+    each axis) over a terminal is: "scroll" (clearly vertical), "select"
+    (anything else that has left the slop), or None while still inside it."""
+    if abs(ux) <= slop and abs(uy) <= slop:
+        return None
+    return "scroll" if abs(uy) > abs(ux) * dominance else "select"
+
+
+def terminal_at(px, py, mon):
+    """Layout (x, y) of normalised panel point (px, py) if a terminal is under
+    it and no ignored layer (the rail, the keyboard) is; else None."""
+    try:
+        x, y = to_layout(px, py, mon)
+        if inside((x, y), ignored_rects(json.loads(hyprctl("layers", "-j") or "{}"))):
+            return None
+        ws = (mon.get("activeWorkspace") or {}).get("id")
+        win = window_at((x, y), json.loads(hyprctl("clients", "-j") or "[]"), ws)
+        if not win or (win.get("class") or "").lower() not in SCROLL_CLASSES:
+            return None
+        return x, y
+    except (OSError, ValueError, KeyError, TypeError, subprocess.SubprocessError):
+        return None
+
+
+class Select:
+    """A text selection marked by one finger and then played to the terminal
+    as a mouse drag — AFTER the finger has lifted.
+
+    Not while it is down: GTK gives a widget's click gesture to one input at a
+    time, so for as long as the finger is on the terminal a mouse button press
+    there is ignored (measured: a live synthetic drag selected one character).
+    Once the touch has ended the same drag selects exactly. The price is that
+    the highlight appears on lift, not under the moving finger."""
+
+    def __init__(self):
+        self.active = False
+        self.mon = {}
+        self.origin = None
+
+    def _move(self, px, py):
+        x, y = to_layout(px, py, self.mon)
+        hyprctl("dispatch", f"hl.dsp.cursor.move({{ x = {x}, y = {y} }})")
+
+    def _button(self, code):
+        subprocess.run(["ydotool", "click", code], stdout=subprocess.DEVNULL,
+                       stderr=subprocess.DEVNULL, timeout=2)
+
+    def begin(self, px, py):
+        """Mark the start at normalised panel (px, py). False if no terminal
+        is there."""
+        mon = monitor()
+        if not DRY and terminal_at(px, py, mon) is None:
+            return False
+        if DRY:
+            print("SELECT begin", flush=True)
+        self.mon, self.origin, self.active = mon, (px, py), True
+        return True
+
+    def end(self, px=None, py=None):
+        """The finger lifted at (px, py): play the drag. With no point, the
+        selection is abandoned."""
+        if not self.active:
+            return
+        self.active = False
+        if px is None:
+            return
+        if DRY:
+            print("SELECT end", flush=True)
+            return
+        (ox, oy), steps = self.origin, 4
+        down = False
+        try:
+            time.sleep(0.06)                # let the terminal see the touch end
+            self._move(ox, oy)
+            time.sleep(0.03)                # ...and the pointer arrive
+            self._button("0x40")            # left button down
+            down = True
+            for i in range(1, steps + 1):   # a drag needs motion, not a jump
+                self._move(ox + (px - ox) * i / steps, oy + (py - oy) * i / steps)
+                time.sleep(0.015)
+        except (OSError, subprocess.SubprocessError):
+            pass
+        finally:
+            if down:
+                try:
+                    self._button("0x80")    # left button up, whatever happened
+                except (OSError, subprocess.SubprocessError):
+                    pass
+
+
+SELECT = Select()
+
+
+def fling_velocity(samples, window=FLING_WINDOW, step=SCROLL_STEP, cap=FLING_CAP):
+    """Speed in wheel notches per second at the end of a drag, from its
+    (time, travel) samples: the travel over the last `window` seconds. 0 if the
+    finger had stopped (no sample that recent) or there is too little to go on."""
+    if len(samples) < 2:
+        return 0.0
+    t1, y1 = samples[-1]
+    recent = [(t, y) for t, y in samples if t1 - t <= window]
+    t0, y0 = recent[0]
+    if t1 - t0 < 0.02:
+        return 0.0
+    return max(-cap, min(cap, (y1 - y0) / (t1 - t0) / step))
+
+
+def fling_steps(velocity, tau=FLING_TAU, tick=FLING_TICK, stop=FLING_STOP, longest=FLING_MAX):
+    """The wheel notches a fling at `velocity` (notches/s) emits, one entry per
+    tick, as it decays to a stop."""
+    steps, travelled, emitted, t = [], 0.0, 0, 0.0
+    while abs(velocity) >= stop and t < longest:
+        travelled += velocity * tick
+        owed = int(travelled) - emitted
+        emitted += owed
+        steps.append(owed)
+        velocity *= math.exp(-tick / tau)
+        t += tick
+    return steps
+
+
+def wheel(notches):
+    if not notches:
+        return
+    if DRY:
+        print("SCROLL", notches, flush=True)
+        return
+    try:
+        subprocess.run(["ydotool", "mousemove", "--wheel", "-x", "0", "-y", str(notches)],
+                       stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=2)
+    except (OSError, subprocess.SubprocessError):
+        pass
+
+
+class Fling:
+    """The scroll that carries on after the finger lifts. One at a time; the
+    next touch anywhere stops it."""
+
+    def __init__(self):
+        self.stop = threading.Event()
+        self.thread = None
+
+    def start(self, velocity):
+        self.cancel()
+        if abs(velocity) < FLING_MIN:
+            return
+        self.stop = threading.Event()
+        self.thread = threading.Thread(target=self._run, args=(velocity, self.stop), daemon=True)
+        self.thread.start()
+
+    def cancel(self):
+        self.stop.set()
+
+    @staticmethod
+    def _run(velocity, stop):
+        for owed in fling_steps(velocity):
+            if stop.wait(FLING_TICK):
+                return
+            wheel(owed)
+
+
+FLING = Fling()
+
+
+class Scroll:
+    """One drag that scrolls: two fingers, or one finger moving vertically.
+    Decides once whether the window under the fingers is a terminal, then
+    turns vertical travel into wheel notches as it happens."""
+
+    def __init__(self, cx, cy, when, fingers=(), settle=SCROLL_SETTLE, shield=True):
+        self.cx, self.cy, self.when = cx, cy, when     # centroid at start (normalised panel)
+        self.fingers = list(fingers)                   # each finger at start (normalised panel)
+        self.settle = settle
+        self.mon = monitor()
+        self.emitted = 0
+        self.samples = []                              # (time, vertical travel) for the fling
+        # Decided the moment the second finger lands, so the terminal can be
+        # shielded before the first finger's drag has selected anything.
+        self.allowed = self.aim()
+        # Two fingers only. One finger over a terminal needs no shield: the
+        # terminal ignores the touch (see TERMINALS in the header).
+        if self.allowed and shield:
+            SHIELD.up(when)
+
+    def update(self, cx, cy, now):
+        if not self.allowed or now - self.when < self.settle:
+            return
+        _, uy = to_user(cx - self.cx, cy - self.cy, self.mon.get("transform") or 0)
+        self.samples.append((now, uy))
+        del self.samples[:-40]
+        owed = wheel_notches(uy, self.emitted)
+        if not owed:
+            return
+        self.emitted += owed
+        wheel(owed)
+
+    def release(self):
+        """The fingers lifted: carry on if they were still moving."""
+        if self.allowed:
+            FLING.start(fling_velocity(self.samples))
+
+    def aim(self):
+        """Report whether the window under the fingers is one we scroll for,
+        and only then put the pointer there (wheel events go to the pointer's
+        window, and touch does not move it). Touch-aware apps scroll
+        themselves; doing it for them too would scroll twice.
+
+        The pointer must NOT move for anything else: focus follows the mouse,
+        so moving it first (as this did until 2026-11-09) changed the focused
+        window on every stray two-finger touch — e.g. a thumb holding the mic
+        button while another finger steadied the tablet — and the dictation
+        was then pasted into the wrong window."""
+        if DRY:
+            return True
+        try:
+            rects = ignored_rects(json.loads(hyprctl("layers", "-j") or "{}"))
+            if any(inside(to_layout(fx, fy, self.mon), rects) for fx, fy in self.fingers):
+                return False
+            x, y = to_layout(self.cx, self.cy, self.mon)
+            ws = (self.mon.get("activeWorkspace") or {}).get("id")
+            win = window_at((x, y), json.loads(hyprctl("clients", "-j") or "[]"), ws)
+            if not win or (win.get("class") or "").lower() not in SCROLL_CLASSES:
+                return False
+            hyprctl("dispatch", f"hl.dsp.cursor.move({{ x = {x}, y = {y} }})")
+        except (OSError, ValueError, KeyError, TypeError, subprocess.SubprocessError):
+            return False
+        return True
+
+
+def run(node):
+    fd = os.open(node, os.O_RDONLY)
+    try:
+        (_, xr), (_, yr) = axis_range(fd, ABS_MT_POSITION_X), axis_range(fd, ABS_MT_POSITION_Y)
+        slot = 0
+        pos = {}          # slot -> [x, y] for fingers currently down
+        start = {}        # slot -> (x0, y0, x_now, y_now) for this touch sequence
+        peak = 0          # most fingers down at once in this sequence
+        scroll = None     # the two-finger drag in progress, if any
+        marked = None     # when the touch mark was last refreshed
+        touched = None    # when a finger was last seen on the glass
+        began = None      # wall-clock start of this touch sequence
+        pressed = False   # the long press of this sequence has fired
+        selecting = False # the held finger is dragging (menu hidden meanwhile)
+        one = None        # this sequence's one-finger drag: None | "scroll" | "select" | "other"
+        mark_touch(time.time())   # make sure the file exists for its watchers
+        while True:
+            # A finger held perfectly still sends nothing, so a long press has
+            # to be noticed by the clock, not by the next event.
+            waiting = began is not None and peak == 1 and len(pos) == 1 and not pressed and one is None
+            if waiting:
+                left = began + LONGPRESS - time.time()
+                if left > 0 and not select.select([fd], [], [], left)[0]:
+                    left = 0
+                if left <= 0:
+                    (x0, y0, x1, y1), = start.values() if len(start) == 1 else ((0, 0, xr, yr),)
+                    if is_long_press(time.time() - began, (x1 - x0) / xr, (y1 - y0) / yr, pressed):
+                        MENU.show(x1 / xr, y1 / yr)
+                    pressed = True
+                    continue
+            data = os.read(fd, EVENT.size * 64)
+            if not data:
+                return
+            for off in range(0, len(data) - EVENT.size + 1, EVENT.size):
+                sec, usec, etype, code, value = EVENT.unpack_from(data, off)
+                if etype == EV_ABS:
+                    if code == ABS_MT_SLOT:
+                        slot = value
+                    elif code == ABS_MT_TRACKING_ID:
+                        if value == -1:
+                            pos.pop(slot, None)
+                        else:
+                            pos[slot] = [None, None]
+                    elif code == ABS_MT_POSITION_X and slot in pos:
+                        pos[slot][0] = value
+                    elif code == ABS_MT_POSITION_Y and slot in pos:
+                        pos[slot][1] = value
+                elif etype == EV_SYN and code == 0:
+                    now = sec + usec / 1e6
+                    down = {s: p for s, p in pos.items() if p[0] is not None and p[1] is not None}
+                    for s, (x, y) in down.items():
+                        origin = start.get(s, (x, y))[:2]
+                        start[s] = origin + (x, y)   # (x0, y0, x_now, y_now)
+                    peak = max(peak, len(pos))
+                    if down and began is None:
+                        began = time.time()
+                        FLING.cancel()                 # a touch stops a running fling
+                        write_run("touch-down", f"{began:.3f}\n")   # tablet-touch: ends the mic focus lock
+                        x, y = next(iter(down.values()))
+                        MENU.touch(x / xr, y / yr)
+                    if pos:
+                        if burst_start(now, touched):
+                            lock_keyboard()
+                        touched = now
+                        if mark_due(now, marked):
+                            marked = now
+                            mark_touch(now)
+
+                    # One finger. Over a terminal a drag is ours to interpret
+                    # (scroll, or select); anywhere else it is the app's own.
+                    if peak == 1 and len(down) == 1:
+                        (x0, y0, x1, y1), = (start[s] for s in down)
+                        if one is None and (abs(x1 - x0) / xr > ONE_FINGER_SLOP
+                                            or abs(y1 - y0) / yr > ONE_FINGER_SLOP):
+                            # Held first: always a selection. Otherwise the
+                            # direction it sets off in decides.
+                            want = "select" if pressed else one_finger_intent(
+                                *to_user((x1 - x0) / xr, (y1 - y0) / yr, transform()))
+                            one = "other"
+                            if want == "scroll":
+                                scroll = Scroll(x0 / xr, y0 / yr, now, [(x0 / xr, y0 / yr)],
+                                                settle=0, shield=False)
+                                if scroll.allowed:
+                                    one = "scroll"
+                                else:
+                                    scroll = None
+                            elif want == "select" and SELECT.begin(x0 / xr, y0 / yr):
+                                one = "select"
+                            if pressed:                    # the menu steps aside for the drag
+                                selecting = True
+                                MENU.hide()
+                        if one == "scroll":
+                            scroll.update(x1 / xr, y1 / yr, now)
+                    elif SELECT.active and len(pos) > 1:   # a second finger landed: abandon it
+                        SELECT.end()
+                    # Two fingers, and never more in this sequence: a scroll.
+                    if peak == 2 and len(down) == 2:
+                        cx = sum(p[0] for p in down.values()) / 2 / xr
+                        cy = sum(p[1] for p in down.values()) / 2 / yr
+                        if scroll is None:
+                            scroll = Scroll(cx, cy, now, [(p[0] / xr, p[1] / yr) for p in down.values()])
+                        else:
+                            scroll.update(cx, cy, now)
+                    elif peak > 2:
+                        # A third finger: this is a swipe, not a scroll. Any
+                        # shield already raised (fingers over a terminal) stays
+                        # up until they lift; none is raised here — see the
+                        # GHOST FINGERS note in the header.
+                        scroll = None
+                    SHIELD.expire(now)
+
+                    if not pos and start:              # last finger lifted
+                        if peak in GESTURES and len(start) == peak:
+                            dx = sum(v[2] - v[0] for v in start.values()) / peak / xr
+                            dy = sum(v[3] - v[1] for v in start.values()) / peak / yr
+                            direction = classify(dx, dy)
+                            if direction:
+                                direction = gesture(peak, rotate(direction, transform()))
+                            if direction:
+                                act(direction, peak)
+                        if scroll is not None and peak <= 2:
+                            scroll.release()
+                        if peak == 1 and len(start) == 1:
+                            (_, _, x1, y1), = start.values()
+                            if one == "select":
+                                SELECT.end(x1 / xr, y1 / yr)
+                            # A selection just ended (ours in a terminal, the
+                            # app's own after a long press elsewhere): Copy.
+                            if one == "select" or selecting:
+                                MENU.show(x1 / xr, y1 / yr)
+                        SELECT.end()                       # never leave the button down
+                        start, peak, scroll = {}, 0, None
+                        began, pressed, selecting, one = None, False, False, None
+                        SHIELD.down()
+    finally:
+        SELECT.end()
+        SHIELD.reset()
+        os.close(fd)
+
+
+def main():
+    import atexit
+    import signal
+
+    atexit.register(SHIELD.reset)
+    atexit.register(SELECT.end)
+    signal.signal(signal.SIGTERM, lambda *_: sys.exit(0))   # run atexit on systemd stop
+    SHIELD.reset()          # a previous run may have died mid-gesture
+    threading.Thread(target=follow_focus, daemon=True).start()
+    while True:
+        # TABLET_GESTURES_DEVICE: read this node instead (tests drive a
+        # virtual touchscreen, which find_touchscreen rightly skips).
+        node = os.environ.get("TABLET_GESTURES_DEVICE") or find_touchscreen()
+        if node:
+            try:
+                run(node)
+            except OSError:
+                pass
+        elif "--once" in sys.argv:
+            sys.exit("tablet-gestures: no touchscreen found")
+        time.sleep(3)
+
+
+if __name__ == "__main__":
+    main()

@@ -1,0 +1,119 @@
+#!/usr/bin/env python3
+"""tablet-mode — one switch for "this machine is a tablet right now".
+
+Whatever DETECTS tablet use calls `tablet-mode set tablet|laptop`; everything
+that REACTS reads the state file or runs as a hook. Detectors:
+  * detachable keyboards (ASUS ProArt PZ13): `tablet-mode watch` — tablet while
+    none of the USB keyboards listed in ~/.config/tablet-mode/keyboards
+    (vid:pid per line) is attached.
+  * anything else (a fold sensor, a hotkey, a script): call `set` yourself.
+
+Reactions:
+  * ~/.local/state/tablet-mode/state  — "tablet" | "laptop"; the tablet.rail
+    shell plugin watches it to show the button rail.
+  * leaving tablet mode hides the on-screen keyboard.
+  * every executable in ~/.config/tablet-mode/hooks.d/ runs with the new mode.
+
+    tablet-mode set tablet|laptop | toggle | status
+    tablet-mode mic always|auto      keep the mic button on screen in laptop mode too
+    tablet-mode dictation on|off     show the mic button at all (needs a dictation
+                                     backend: see `tablet-touch` DICTATION)
+    tablet-mode watch                detachable-keyboard detector (user service)
+"""
+import glob
+import os
+import subprocess
+import sys
+
+STATE_DIR = os.path.join(os.environ.get("XDG_STATE_HOME", os.path.expanduser("~/.local/state")), "tablet-mode")
+CONF_DIR = os.path.join(os.environ.get("XDG_CONFIG_HOME", os.path.expanduser("~/.config")), "tablet-mode")
+BIN = os.path.expanduser("~/.local/bin/")
+
+
+def read(path, default):
+    try:
+        return open(path).read().strip() or default
+    except OSError:
+        return default
+
+
+def write(path, value):
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    tmp = path + ".tmp"
+    with open(tmp, "w") as f:
+        f.write(value + "\n")
+    os.replace(tmp, path)   # atomic, so the shell's file watcher never reads half
+
+
+def status():
+    return read(os.path.join(STATE_DIR, "state"), "laptop")
+
+
+def set_mode(mode, force=False):
+    if mode not in ("tablet", "laptop"):
+        sys.exit("tablet-mode: set tablet|laptop")
+    if mode == status() and not force:
+        return
+    write(os.path.join(STATE_DIR, "state"), mode)
+    if mode == "laptop":
+        subprocess.run([BIN + "tablet-osk", "hide"], stderr=subprocess.DEVNULL)
+    for hook in sorted(glob.glob(os.path.join(CONF_DIR, "hooks.d", "*"))):
+        if os.access(hook, os.X_OK):
+            subprocess.run([hook, mode], timeout=20)
+    print(mode)
+
+
+def keyboards():
+    ids = set()
+    for line in read(os.path.join(CONF_DIR, "keyboards"), "").splitlines():
+        line = line.split("#")[0].strip().lower()
+        if ":" in line:
+            ids.add(line)
+    return ids
+
+
+def attached(ids):
+    for dev in glob.glob("/sys/bus/usb/devices/*/idVendor"):
+        d = os.path.dirname(dev)
+        if f"{read(dev, '')}:{read(d + '/idProduct', '')}".lower() in ids:
+            return True
+    return False
+
+
+def watch():
+    ids = keyboards()
+    if not ids:
+        sys.exit("tablet-mode watch: no keyboards listed in " + os.path.join(CONF_DIR, "keyboards"))
+
+    def check():
+        set_mode("laptop" if attached(ids) else "tablet")
+
+    check()
+    mon = subprocess.Popen(["udevadm", "monitor", "--udev", "--subsystem-match=usb"],
+                           stdout=subprocess.PIPE, text=True)
+    for line in mon.stdout:
+        if " add " in line or " remove " in line or " bind " in line or " unbind " in line:
+            check()
+    sys.exit(mon.wait() or 1)   # let systemd restart a dead monitor
+
+
+def main():
+    cmd = sys.argv[1:] or ["status"]
+    if cmd[0] == "set" and len(cmd) == 2:
+        set_mode(cmd[1])
+    elif cmd[0] == "toggle":
+        set_mode("laptop" if status() == "tablet" else "tablet")
+    elif cmd[0] == "status":
+        print(status())
+    elif cmd[0] == "mic" and len(cmd) == 2 and cmd[1] in ("always", "auto"):
+        write(os.path.join(STATE_DIR, "mic"), cmd[1])
+    elif cmd[0] == "dictation" and len(cmd) == 2 and cmd[1] in ("on", "off"):
+        write(os.path.join(STATE_DIR, "dictation"), cmd[1])
+    elif cmd[0] == "watch":
+        watch()
+    else:
+        sys.exit(__doc__)
+
+
+if __name__ == "__main__":
+    main()

@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 1,
+  "id": "tablet.rail",
+  "name": "Tablet rail",
+  "version": "0.1.0",
+  "author": "omarchy-tablet",
+  "description": "Edge rail of touch buttons for tablet use: close, switch, maximise, launcher, stay awake, scroll strip, workspaces, keyboard, Enter, push-to-talk mic",
+  "kinds": [
+    "service"
+  ],
+  "entryPoints": {
+    "service": "Main.qml"
+  }
+}

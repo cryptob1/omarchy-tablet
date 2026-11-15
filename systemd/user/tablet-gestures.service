@@ -1,0 +1,15 @@
+[Unit]
+Description=omarchy-tablet: touchscreen gestures (tablet-gestures)
+After=graphical-session.target
+PartOf=graphical-session.target
+
+[Service]
+ExecStart=%h/.local/bin/tablet-gestures
+# Belt and braces for the gesture shield: never leave the touchscreen switched
+# off in Hyprland if the daemon is killed mid-gesture.
+ExecStopPost=/bin/sh -c 'n=$(hyprctl devices -j | jq -r ".touch[0].name // empty"); [ -n "$n" ] && hyprctl eval "hl.device({ name = \"$n\", enabled = true })" >/dev/null 2>&1 || true'
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=graphical-session.target

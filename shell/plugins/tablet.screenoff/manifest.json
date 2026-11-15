@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 1,
+  "id": "tablet.screenoff",
+  "name": "Tablet screen timeout",
+  "version": "0.1.0",
+  "author": "omarchy-tablet",
+  "description": "Turns the display off after ten minutes without input, and back on at the next touch or key",
+  "kinds": [
+    "service"
+  ],
+  "entryPoints": {
+    "service": "Main.qml"
+  }
+}

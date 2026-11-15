@@ -1,0 +1,335 @@
+#!/usr/bin/env python3
+"""tablet-touch — what the rail's touch controls do (tablet.rail shell plugin).
+
+    tablet-touch mic-press | mic-release
+        The mic button. Runs the dictation backend's press / release command
+        (see DICTATION below) and locks focus on the dictation target while
+        it works.
+
+        WHY: touching a layer surface can hand focus to the window UNDER it —
+        on release, or when a dictation overlay maps or unmaps — because focus
+        follows the pointer and the touch has just put it over the button. The
+        dictation was then pasted into (or refused for) the wrong window. On
+        press this notes the window that had focus before the finger landed
+        (from the focus history bin/tablet-gestures keeps) and starts a
+        guard that holds focus there from that moment until dictation is idle
+        again. The lock ends early if the user touches the screen again after
+        letting go, and never pulls them back to a workspace they left.
+
+    tablet-touch copy|paste|all [--terminal] [--address 0x…]
+        The long-press menu. Terminals take Ctrl+Shift+V; "copy" there copies
+        the mouse selection (a long press is itself a click, which clears the
+        highlight, but the selection is still in the primary clipboard).
+
+    tablet-touch scroll-aim
+        The rail's scroll strip is about to send wheel events: put the pointer
+        over the focused window so they reach it.
+
+    tablet-touch next-window
+        The rail's switch button: focus the next window on this workspace. If
+        the current one fills the screen (maximised or fullscreen), the next
+        one takes its place in the same state, so it works as a swap.
+"""
+import json
+import os
+import subprocess
+import sys
+import time
+
+RUN_DIR = os.path.join(os.environ.get("XDG_RUNTIME_DIR", "/tmp"), "tablet-mode")
+BIN = os.path.expanduser("~/.local/bin/")
+CONF_DIR = os.path.join(os.environ.get("XDG_CONFIG_HOME", os.path.expanduser("~/.config")), "tablet-mode")
+# The dictation backend's state, if it publishes one. Either a plain word in
+# $XDG_RUNTIME_DIR/tablet-mode/mic-state (idle | recording | transcribing), or
+# Cortex's JSON state file. With neither, dictation counts as idle.
+MIC_STATE = os.path.join(RUN_DIR, "mic-state")
+CORTEX_STATE = os.path.join(os.environ.get("XDG_RUNTIME_DIR", "/tmp"), "cortex", "state")
+FOCUS_GRACE = 0.6      # s: a focus change this recent was caused by the touch itself
+GUARD_MAX = 90.0       # s: a tap-to-talk session can be long
+GUARD_SETTLE = 1.0     # s dictation must be idle before the guard lets go
+GUARD_EVERY = 0.12
+TOUCH_AFTER = 0.15     # s after release: a touch later than this ends the lock
+KEYS = {"ctrl": 29, "shift": 42, "a": 30, "c": 46, "v": 47}
+
+
+def read_json(path):
+    try:
+        with open(path) as f:
+            return json.load(f)
+    except (OSError, ValueError):
+        return {}
+
+
+def write(name, text):
+    os.makedirs(RUN_DIR, exist_ok=True)
+    tmp = os.path.join(RUN_DIR, name + ".tmp")
+    with open(tmp, "w") as f:
+        f.write(text)
+    os.replace(tmp, os.path.join(RUN_DIR, name))
+
+
+def hyprctl(*args):
+    return subprocess.run(["hyprctl", *args], capture_output=True, text=True, timeout=3).stdout
+
+
+def active():
+    try:
+        return json.loads(hyprctl("activewindow", "-j") or "{}").get("address", "")
+    except (ValueError, OSError, subprocess.SubprocessError):
+        return ""
+
+
+def focus_before(history, now, grace=FOCUS_GRACE):
+    """The window that had focus before a touch at `now`: the current one,
+    unless it only just took focus (the touch did that) — then the one before."""
+    current, previous = history.get("current"), history.get("previous")
+    if current and previous and now - float(current[1]) < grace:
+        return previous[0]
+    return current[0] if current else ""
+
+
+def mic_state():
+    try:
+        with open(MIC_STATE) as f:
+            return f.read().strip() or "idle"
+    except OSError:
+        return str(read_json(CORTEX_STATE).get("class", "idle"))
+
+
+def cortex_idle():
+    return mic_state() in ("idle", "error")
+
+
+def focus(address):
+    hyprctl("dispatch", f'hl.dsp.focus({{ window = "address:{address}" }})')
+
+
+def park_pointer(address):
+    """Put the (hidden) pointer over `address`, so that focus-follows-mouse
+    agrees with us instead of sending focus back under the button."""
+    try:
+        for c in json.loads(hyprctl("clients", "-j") or "[]"):
+            if c.get("address") == address:
+                x = c["at"][0] + c["size"][0] // 2
+                y = c["at"][1] + c["size"][1] // 2
+                hyprctl("dispatch", f"hl.dsp.cursor.move({{ x = {x}, y = {y} }})")
+                return
+    except (ValueError, KeyError, TypeError, OSError, subprocess.SubprocessError):
+        pass
+
+
+FULLSCREEN_MODES = {1: "maximized", 2: "fullscreen"}
+
+
+def next_window(clients, workspace_id, current):
+    """Address of the window after `current` on the workspace, or "" if there
+    is no other. Address order, not screen position: a window that fills the
+    screen sits at the same spot as the one it covers, and position order then
+    flips between presses and traps the cycle between two windows."""
+    here = sorted(c["address"] for c in clients or []
+                  if (c.get("workspace") or {}).get("id") == workspace_id
+                  and c.get("mapped", True) and not c.get("hidden") and c.get("address"))
+    if current in here:
+        here = here[here.index(current) + 1:] + here[:here.index(current)]
+    return here[0] if here else ""
+
+
+def switch_window():
+    try:
+        workspace = json.loads(hyprctl("activeworkspace", "-j") or "{}").get("id")
+        clients = json.loads(hyprctl("clients", "-j") or "[]")
+        window = json.loads(hyprctl("activewindow", "-j") or "{}")
+    except (ValueError, OSError, subprocess.SubprocessError):
+        return
+    current = window.get("address", "") if (window.get("workspace") or {}).get("id") == workspace else ""
+    target = next_window(clients, workspace, current)
+    if not target:
+        return
+    # A window that fills the screen hides the rest, so hand its state on:
+    # restore it, then give the next one the same mode.
+    mode = FULLSCREEN_MODES.get(int(window.get("fullscreen") or 0)) if current else None
+    if mode:
+        hyprctl("dispatch", f'hl.dsp.window.fullscreen({{ mode = "{mode}" }})')
+    focus(target)
+    if mode:
+        hyprctl("dispatch", f'hl.dsp.window.fullscreen({{ mode = "{mode}" }})')
+    # The pointer is still over the rail; put it where focus now is.
+    park_pointer(target)
+
+
+def dictation_command(event):
+    """argv for the dictation backend's press ("key-down") or release
+    ("key-up"), or None if there is none.
+
+    DICTATION. The mic button is a push-to-talk key for whatever dictation tool
+    you use. Put two executables in ~/.config/tablet-mode/:
+        mic-press      run when the finger lands on the mic
+        mic-release    run when it lifts
+    Without them, `cortex-ctl key-down` / `key-up` is used if Cortex is
+    installed. `tablet-mode dictation on` shows the button."""
+    hook = os.path.join(CONF_DIR, "mic-press" if event == "key-down" else "mic-release")
+    if os.access(hook, os.X_OK):
+        return [hook]
+    if os.access(BIN + "cortex-ctl", os.X_OK):
+        return [BIN + "cortex-ctl", event]
+    return None
+
+
+def cortex(event):
+    argv = dictation_command(event)
+    if argv:
+        subprocess.Popen(argv, stdin=subprocess.DEVNULL,
+                         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
+
+def on_this_workspace(address):
+    """Is `address` on the workspace being shown? (Never drag the user back
+    to a workspace they have left.)"""
+    try:
+        here = json.loads(hyprctl("activeworkspace", "-j") or "{}").get("id")
+        for c in json.loads(hyprctl("clients", "-j") or "[]"):
+            if c.get("address") == address:
+                return c.get("workspace", {}).get("id") == here
+    except (ValueError, OSError, subprocess.SubprocessError):
+        pass
+    return False
+
+
+def mtime(name):
+    try:
+        return os.stat(os.path.join(RUN_DIR, name)).st_mtime
+    except OSError:
+        return 0.0
+
+
+def guard_over(mine, now, idle_since, touched_at):
+    """Why the focus lock should end, or "" to keep holding. `mine` is the
+    mic-target entry as it is now on disk plus our own "press"."""
+    if mine.get("current_press") != mine.get("press"):
+        return "newer press"
+    if now - float(mine.get("press", 0)) > GUARD_MAX:
+        return "timeout"
+    release = mine.get("release")
+    if release is None:
+        return ""                              # finger still down: always hold
+    if touched_at > float(release) + TOUCH_AFTER:
+        return "touched elsewhere"             # a later touch is the user's choice
+    if idle_since is not None and now - idle_since >= GUARD_SETTLE:
+        return "dictation done"
+    return ""
+
+
+def mic_press():
+    cortex("key-down")                       # first: the hold length is the gesture
+    now = time.time()
+    target = focus_before(read_json(os.path.join(RUN_DIR, "focus")), now) or active()
+    write("mic-target", json.dumps({"address": target, "press": now}))
+    if target:
+        subprocess.Popen([sys.argv[0], "mic-guard", repr(now)], stdin=subprocess.DEVNULL,
+                         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True)
+
+
+def mic_release():
+    cortex("key-up")
+    mine = read_json(os.path.join(RUN_DIR, "mic-target"))
+    if mine:
+        mine["release"] = time.time()
+        write("mic-target", json.dumps(mine))
+
+
+def mic_guard(press_at):
+    """Lock focus on the dictation target from the moment the finger lands
+    until dictation has finished. Event-driven (Hyprland's event socket), so a
+    stray focus change is undone at once rather than on the next poll."""
+    import socket
+    target = read_json(os.path.join(RUN_DIR, "mic-target")).get("address")
+    if not target:
+        return
+    sig = os.environ.get("HYPRLAND_INSTANCE_SIGNATURE", "")
+    path = os.path.join(os.environ.get("XDG_RUNTIME_DIR", "/tmp"), "hypr", sig, ".socket2.sock")
+    sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+    sock.connect(path)
+    sock.settimeout(GUARD_EVERY)
+    want = target.removeprefix("0x")
+    idle_since = None
+    buf = b""
+    check = True                               # look once right away
+    if on_this_workspace(target):
+        park_pointer(target)                   # so a refocus under the pointer agrees with us
+    while True:
+        now = time.time()
+        mine = read_json(os.path.join(RUN_DIR, "mic-target"))
+        idle_since = (idle_since or now) if cortex_idle() else None
+        state = {"press": press_at, "current_press": mine.get("press"), "release": mine.get("release")}
+        if guard_over(state, now, idle_since, mtime("touch-down")):
+            return
+        if check:
+            check = False
+            now_active = active()
+            if now_active and now_active != target and on_this_workspace(target):
+                focus(target)                  # also warps the hidden pointer onto it
+        try:
+            data = sock.recv(4096)
+            if not data:
+                return
+            buf += data
+            *lines, buf = buf.split(b"\n")
+            for line in lines:
+                if line.startswith(b"activewindowv2>>") and line[16:].decode(errors="replace").strip() != want:
+                    check = True
+                elif line.startswith((b"openlayer>>", b"closelayer>>")):
+                    check = True
+        except socket.timeout:
+            check = True                       # belt and braces: poll as well
+        except OSError:
+            return
+
+
+def press(*names):
+    codes = [KEYS[n] for n in names]
+    subprocess.run(["ydotool", "key", *[f"{c}:1" for c in codes], *[f"{c}:0" for c in reversed(codes)]],
+                   stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=3)
+
+
+def menu(action, terminal, address):
+    if address:
+        if active() != address:
+            focus(address)
+            time.sleep(0.08)
+    if action == "paste":
+        press("ctrl", "shift", "v") if terminal else press("ctrl", "v")
+    elif action == "all":
+        press("ctrl", "a")
+    elif action == "copy":
+        if terminal:
+            sel = subprocess.run(["wl-paste", "--primary", "--no-newline"], capture_output=True, timeout=3)
+            if sel.returncode == 0 and sel.stdout:
+                subprocess.run(["wl-copy"], input=sel.stdout, timeout=3)
+        else:
+            press("ctrl", "c")
+
+
+def main():
+    args = sys.argv[1:]
+    cmd = args[0] if args else ""
+    if cmd == "mic-press":
+        mic_press()
+    elif cmd == "mic-release":
+        mic_release()
+    elif cmd == "mic-guard" and len(args) > 1:
+        mic_guard(float(args[1]))
+    elif cmd == "next-window":
+        switch_window()
+    elif cmd == "scroll-aim":
+        # The rail's scroll strip: wheel events go to the window under the
+        # pointer, and a touch on the rail does not move it.
+        park_pointer(active())
+    elif cmd in ("copy", "paste", "all"):
+        address = args[args.index("--address") + 1] if "--address" in args[:-1] else ""
+        menu(cmd, "--terminal" in args, address)
+    else:
+        sys.exit(__doc__)
+
+
+if __name__ == "__main__":
+    main()

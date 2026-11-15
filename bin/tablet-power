@@ -1,0 +1,43 @@
+#!/bin/bash
+# tablet-power — what the power button does (bound in hypr/fragments/tablet.lua).
+#
+#   keyboard attached            System menu, as Omarchy does by default
+#   tablet, short press          lock (the lock screen blanks the display)
+#   tablet, held HOLD seconds    System menu (shut down, restart, ...)
+#
+# `press` leaves a marker and arms a timer; `release` before the timer fires
+# takes the marker and locks. Whoever takes the marker acts, so the two can
+# never both run.
+#
+# Usage: tablet-power press|release
+set -uo pipefail
+HOLD="${TABLET_POWER_HOLD:-0.7}"
+state="${XDG_STATE_HOME:-$HOME/.local/state}/tablet-mode/state"
+dir="${XDG_RUNTIME_DIR:-/tmp}/tablet-mode"
+marker="$dir/power-press"
+menu() { omarchy-menu toggle system >/dev/null 2>&1; }
+take() { rm "$marker" 2>/dev/null; }      # true for exactly one caller
+
+case "${1:-}" in
+  press)
+    if [ "$(cat "$state" 2>/dev/null)" != "tablet" ]; then
+      menu
+      exit 0
+    fi
+    mkdir -p "$dir"
+    id="$$.$RANDOM"
+    echo "$id" > "$marker"
+    (
+      sleep "$HOLD"
+      [ "$(cat "$marker" 2>/dev/null)" = "$id" ] && take && menu
+    ) >/dev/null 2>&1 &
+    ;;
+  release)
+    # Already locked: do nothing (a touch or this press has woken the screen;
+    # asking the lock service again tells it a suspend is coming).
+    if take && [ "$(omarchy-shell lock isLocked 2>/dev/null)" != "true" ]; then
+      omarchy system lock >/dev/null 2>&1
+    fi
+    ;;
+  *) echo "usage: tablet-power press|release" >&2; exit 2 ;;
+esac

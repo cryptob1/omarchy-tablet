@@ -1,0 +1,62 @@
+#!/bin/bash
+# tablet-osk — show/hide the on-screen keyboard (wvkbd).
+#
+# Spawned and killed on demand rather than started hidden and signalled:
+# wvkbd's --hidden start raced layer-shell init and crashed on the PX13, and a
+# killed keyboard costs nothing. wvkbd types through the virtual-keyboard
+# protocol, so it coexists with fcitx5 (which owns the input-method slot that
+# squeekboard would need).
+#
+# lock-watch is how the lock screen gets a keyboard on a tablet: if the session
+# is locked it shows the keyboard (the hypr fragment tablet.lua lets the wvkbd
+# layer sit above the lock screen and take touches), waits for the unlock and
+# hides it again. bin/tablet-gestures runs it on the first touch after a pause.
+# It gives up after LOCK_IDLE seconds without a touch, so a tablet left locked
+# on a table is not polled all night.
+#
+# Usage: tablet-osk show|hide|toggle|status|lock-watch
+set -uo pipefail
+bin=wvkbd-mobintl
+running() { pgrep -x "$bin" >/dev/null 2>&1; }
+show() {
+  running && return 0
+  command -v "$bin" >/dev/null 2>&1 || { echo "tablet-osk: $bin not installed" >&2; exit 1; }
+  # -L/-H: height in landscape/portrait. Roughly a third of the short side.
+  # Overlay layer: Omarchy's bar panels (Wi-Fi, Bluetooth, audio) are
+  # full-screen Overlay surfaces that close on any touch outside their card.
+  # On wvkbd's default Top layer the keyboard sat UNDER that surface, so the
+  # first key typed into a Wi-Fi password landed on the panel and closed it.
+  # hypr/fragments/tablet.lua keeps it above them whichever mapped first.
+  setsid -f "$bin" --wayland-layer overlay \
+    -L "${TABLET_OSK_LANDSCAPE:-300}" -H "${TABLET_OSK_PORTRAIT:-360}" \
+    >/dev/null 2>&1 </dev/null
+}
+hide() { pkill -x "$bin" 2>/dev/null || true; }
+locked() { [ "$(omarchy-shell lock isLocked 2>/dev/null)" = "true" ]; }
+LOCK_IDLE=45
+lock_watch() {
+  locked || return 0
+  local dir="${XDG_RUNTIME_DIR:-/tmp}/tablet-mode" now mark
+  mkdir -p "$dir"
+  exec 9>"$dir/lock-osk.lock"
+  flock -n 9 || return 0          # one watcher at a time
+  show
+  while locked; do
+    sleep 1
+    now=$(date +%s)
+    mark=$(stat -c %Y "$dir/touch" 2>/dev/null || echo "$now")
+    if [ $((now - mark)) -ge "$LOCK_IDLE" ]; then
+      hide
+      return 0                    # the next touch starts a new watch
+    fi
+  done
+  hide
+}
+case "${1:-toggle}" in
+  show) show ;;
+  hide) hide ;;
+  toggle) if running; then hide; else show; fi ;;
+  status) running && echo shown || echo hidden ;;
+  lock-watch) lock_watch ;;
+  *) echo "usage: tablet-osk show|hide|toggle|status|lock-watch" >&2; exit 2 ;;
+esac
