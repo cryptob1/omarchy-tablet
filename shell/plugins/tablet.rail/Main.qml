@@ -243,6 +243,22 @@ Item {
     : (skin.palette && skin.pattern.indexOf("wash") >= 0 ? skin.palette[0] : skin.shellTop)
   readonly property string barText: skin && skin.barText ? skin.barText
     : ((barBase.r * 0.299 + barBase.g * 0.587 + barBase.b * 0.114) > 0.58 ? "#1b1c22" : "#ffffff")
+  // The status glass's colour. It has to be dark, because the bar's writing is
+  // the theme's (light) and cannot be changed; and it has to belong to the
+  // skin, or it reads as a strip of some other device let into this one (it
+  // was the theme's navy, in a wooden frame with brown buttons). So: the
+  // skin's own cap colour where the caps are dark, which makes the glass the
+  // same material as the buttons; and where the caps are pale, the skin's
+  // legend colour taken right down, which keeps its hue.
+  function lum(c) { return c.r * 0.299 + c.g * 0.587 + c.b * 0.114 }
+  readonly property color glassColor: {
+    if (!skin) return Color.background
+    if (skin.glass) return skin.glass
+    var cap = Qt.color(skin.cap)
+    if (lum(cap) < 0.30) return cap
+    var deep = Qt.darker(Qt.color(skin.legend), 2.6)
+    return lum(deep) < 0.22 ? deep : Qt.darker(deep, 1.6)
+  }
   // The frame: how far its inside corners sweep, and its edge line.
   readonly property int frameRadius: 14
   // The frame is CLOSED along the bottom by a thin bezel in the same shell: a
@@ -2387,8 +2403,9 @@ Item {
       glow: root.skin ? root.skin.glow : "transparent"
       palette: root.skin && root.skin.palette ? root.skin.palette : []
     }
-    // The status glass: the theme's own bar colour, as a window recessed
-    // into the shell (shadowed along its top, lit along its bottom lip).
+    // The status glass: a dark window recessed into the shell (shadowed
+    // along its top, lit along its bottom lip), in the skin's own dark
+    // colour (root.glassColor).
     Rectangle {
       visible: root.skin !== null
       x: 5; y: 2
@@ -2402,7 +2419,7 @@ Item {
         anchors.fill: parent
         anchors.margins: 1
         radius: height / 2
-        color: Color.background
+        color: root.glassColor
         Rectangle {                        // a faint reflection across the top of the glass
           anchors { left: parent.left; right: parent.right; top: parent.top; margins: 1 }
           height: parent.height * 0.45
