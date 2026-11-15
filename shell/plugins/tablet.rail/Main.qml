@@ -1077,14 +1077,19 @@ Item {
       }
       function mod(a, n) { return ((a % n) + n) % n }
       var R = h - frameBar                 // the inside corners' radius (frame only)
+      // A frame needs corner pieces to be one: with none (the strip of an open
+      // frame is exactly as tall as the bar) it is a plain rectangle. Drawing
+      // it as a frame anyway asked for arcs of zero and negative radius, which
+      // Canvas refuses ("Incorrect argument radius") and the strip went blank.
+      var framed = frameRail > 0 && R > 1
       c.beginPath()
-      if (frameRail > 0 && frameFlip) {
+      if (framed && frameFlip) {
         c.moveTo(0, h); c.lineTo(w, h); c.lineTo(w, 0); c.lineTo(w - frameRail, 0)
         c.arc(w - frameRail - R, 0, R, 0, Math.PI / 2, false)
         c.lineTo(frameRail + R, R)
         c.arc(frameRail + R, 0, R, Math.PI / 2, Math.PI, false)
         c.lineTo(0, 0)
-      } else if (frameRail > 0) {
+      } else if (framed) {
         c.moveTo(0, 0); c.lineTo(w, 0); c.lineTo(w, h); c.lineTo(w - frameRail, h)
         c.arc(w - frameRail - R, h, R, 0, -Math.PI / 2, true)
         c.lineTo(frameRail + R, frameBar)
@@ -1287,20 +1292,21 @@ Item {
       }
       c.globalAlpha = 1
       c.translate(ox, oy)
-      if (frameRail > 0 && shade) {
+      if ((framed || flatWash) && shade) {
         // Light from above: a sheen along the top edge, falling to shadow
         // where the frame meets the screen. The rails are shaded the same way
         // across their width, so the whole frame reads as one raised moulding.
         // (flipped: the outside edge, and so the sheen, is at the bottom)
-        var sg = frameFlip ? c.createLinearGradient(0, h, 0, R) : c.createLinearGradient(0, 0, 0, frameBar)
+        var top = framed ? R : 0, band = framed ? frameBar : h    // locals: never assign the properties
+        var sg = frameFlip ? c.createLinearGradient(0, h, 0, top) : c.createLinearGradient(0, 0, 0, band)
         sg.addColorStop(0, "rgba(255,255,255,0.16)")
         sg.addColorStop(0.45, "rgba(255,255,255,0)")
         sg.addColorStop(1, "rgba(0,0,0,0.30)")
-        c.fillStyle = sg; c.fillRect(0, frameFlip ? R : 0, w, frameBar)
-        c.fillStyle = "rgba(0,0,0,0.30)"; c.fillRect(0, frameFlip ? 0 : frameBar, w, R)
+        c.fillStyle = sg; c.fillRect(0, frameFlip ? top : 0, w, band)
+        if (framed) { c.fillStyle = "rgba(0,0,0,0.30)"; c.fillRect(0, frameFlip ? 0 : band, w, top) }
       }
       c.restore()
-      if (frameRail > 0 && edge.a > 0) {       // the frame's inside edge, round the corners
+      if (framed && edge.a > 0) {       // the frame's inside edge, round the corners
         c.strokeStyle = edge; c.lineWidth = edgeWidth
         var e = edgeWidth / 2
         c.beginPath()
@@ -1817,7 +1823,7 @@ Item {
     WlrLayershell.keyboardFocus: WlrKeyboardFocus.None
     exclusionMode: ExclusionMode.Ignore
     anchors { top: true; left: true; right: true }
-    implicitHeight: Style.bar.sizeHorizontal + (root.framed ? root.frameRadius : 0.5)
+    implicitHeight: Style.bar.sizeHorizontal + (root.framed ? root.frameRadius : 0)
     mask: Region {}                      // never takes a touch
 
     ShellPattern {
@@ -1825,7 +1831,7 @@ Item {
       visible: root.skin !== null
       base: root.skin ? root.barBase : "transparent"
       flatWash: true
-      frameRail: root.framed && root.dual ? root.railSize : 0.01
+      frameRail: root.framed ? (root.dual ? root.railSize : 0.01) : 0
       frameBar: Style.bar.sizeHorizontal
       edge: root.frameEdge
       edgeWidth: root.frameEdgeWidth

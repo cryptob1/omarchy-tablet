@@ -74,6 +74,11 @@ def set_mode(mode, force=False):
     write(os.path.join(STATE_DIR, "state"), mode)
     if mode == "laptop":
         subprocess.run([BIN + "tablet-osk", "hide"], stderr=subprocess.DEVNULL)
+        # With the keyboard on, the screen stands in landscape, and the rails
+        # (and the rotate button on them) are gone: do not leave it sideways.
+        _, transform = panel()
+        if transform % 2:
+            rotate("landscape")
     for hook in sorted(glob.glob(os.path.join(CONF_DIR, "hooks.d", "*"))):
         if os.access(hook, os.X_OK):
             subprocess.run([hook, mode], timeout=20)
@@ -131,11 +136,44 @@ def panel():
     return (mons[0]["name"], int(mons[0].get("transform") or 0)) if mons else ("", 0)
 
 
+ROTATION_LUA = os.path.join(CONF_HOME, "hypr", "omarchy-tablet-rotation.lua")
+
+
+def align_input(transform=None):
+    """Turn touch and pen input the same way as the screen.
+
+    Hyprland does NOT do this by itself: rotate the monitor and a finger still
+    lands where it would have on the unrotated screen (found the hard way, on
+    the first portrait test). The setting is also written to a file that
+    hypr/omarchy-tablet.lua loads, because the screen's rotation is remembered
+    across `hyprctl reload` and restarts while a bare `hyprctl eval` is not —
+    without the file, the first reload would misalign touch again."""
+    name, seen = panel()
+    if not name:
+        return
+    # Right after a turn Hyprland can still report the OLD transform (the turn
+    # is applied a moment after the command returns), so a turn passes the
+    # transform it asked for; only a bare "align" trusts what is reported.
+    if transform is None:
+        transform = seen
+    lua = "hl.config({ input = { touchdevice = { transform = %d }, tablet = { transform = %d } } })" % (transform, transform)
+    try:
+        os.makedirs(os.path.dirname(ROTATION_LUA), exist_ok=True)
+        tmp = ROTATION_LUA + ".tmp"
+        with open(tmp, "w") as f:
+            f.write("-- Written by `tablet-mode rotate`: input follows the screen's rotation.\n" + lua + "\n")
+        os.replace(tmp, ROTATION_LUA)
+        subprocess.run(["hyprctl", "eval", lua], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=5)
+    except (OSError, subprocess.SubprocessError):
+        pass
+
+
 def turn_to(degrees):
     name, _ = panel()
     if name:
         subprocess.run(["omarchy-hyprland-monitor-rotate", "--monitor", name, str(degrees % 360)],
                        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=15)
+        align_input((degrees % 360) // 90)
 
 
 def has_orientation_sensor():
@@ -162,6 +200,8 @@ def rotate(what):
     keep = os.path.join(STATE_DIR, "rotation")
     if what == "status":
         print(read(keep, "landscape"))
+    elif what == "align":                      # put input right for the screen as it is now
+        align_input()
     elif what == "can-auto":
         print("yes" if has_orientation_sensor() else "no")
     elif what == "toggle":
@@ -174,6 +214,8 @@ def rotate(what):
             turn_to(0)
         elif what == "portrait" and not upright:
             turn_to(int(read(os.path.join(CONF_DIR, "portrait-turn"), "90")))   # 90 or 270: which edge is "down"
+        else:
+            align_input(transform % 4)     # no turn needed: still repair input left the wrong way round
         write(keep, what)
     elif what == "auto":
         if not has_orientation_sensor():

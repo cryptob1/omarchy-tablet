@@ -1,6 +1,16 @@
 -- omarchy-tablet: Hyprland rules and binds for tablet use (installed by install.sh).
 local bin = os.getenv("HOME") .. "/.local/bin/"
 
+-- Touch and pen input turned the same way as the screen. `tablet-mode rotate`
+-- writes this file; it has to be loaded here because the screen's rotation
+-- outlives a reload and a setting made with `hyprctl eval` does not.
+local rotation = os.getenv("HOME") .. "/.config/hypr/omarchy-tablet-rotation.lua"
+local probe = io.open(rotation, "r")
+if probe then
+  probe:close()
+  dofile(rotation)
+end
+
 -- The on-screen keyboard must reach the lock screen, or a tablet with its
 -- keyboard detached cannot be unlocked. 2 = drawn above the lock screen AND
 -- allowed to take touches there. Only wvkbd: it types, it shows nothing.

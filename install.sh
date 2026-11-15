@@ -75,6 +75,7 @@ if [ -x "$HOME/.config/tablet-mode/mic-press" ] || omarchy-default-dictation >/d
   "$HOME/.local/bin/tablet-mode" dictation on
 fi
 
+"$HOME/.local/bin/tablet-mode" rotate align   # input the same way round as the screen is now
 hyprctl reload >/dev/null 2>&1 || true
 # Plugin files only load on a shell restart; a rescan keeps running the old QML.
 omarchy restart shell >/dev/null 2>&1 || true
