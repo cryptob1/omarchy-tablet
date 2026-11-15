@@ -37,6 +37,8 @@ A rail on each edge of the screen, shown while the machine is in tablet mode. Wi
 
 The rails follow your theme: the shell's colours, corner radius, border and gaps.
 
+**Two looks.** `tablet-mode look controller` draws the rails like a handheld game controller: a moulded shell a shade lighter than your background, the buttons as raised caps that sink when pressed, the scroll strip as a ridged thumb wheel. `tablet-mode look theme` goes back to the flat Omarchy look. Both take their colours from the theme.
+
 ### Gestures
 
 | Gesture | Does |

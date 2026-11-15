@@ -14,6 +14,13 @@
 // `tablet-mode rails right`, or an upright screen, gives the single rail
 // described below, which has no media or volume buttons.
 //
+// TWO LOOKS (`tablet-mode look theme|controller`). "theme" draws the rails like
+// every other Omarchy surface. "controller" draws them like a handheld game
+// controller: a moulded shell a shade lighter than the theme's background,
+// with the buttons as raised caps that sink when pressed, the scroll strip as
+// a ridged thumb wheel, and the close legend in red. Colours still come from
+// the theme, so it changes with it.
+//
 // THE RAIL. While ~/.local/state/tablet-mode/state reads "tablet" (written by
 // bin/tablet-mode on keyboard detach) a strip RAIL px wide is reserved along
 // the right edge (the bottom edge when the screen is upright). Windows stop
@@ -81,6 +88,10 @@ Item {
   readonly property string stateDir: home + "/.local/state/tablet-mode"
   property string mode: "laptop"
   property string micPref: "auto"
+  // `tablet-mode look theme|controller`: drawn like the rest of Omarchy, or
+  // like a handheld game controller (a moulded shell with raised button caps).
+  property string lookPref: "theme"
+  readonly property bool controller: lookPref.trim() === "controller"
   // `tablet-mode rails both|right`: a rail on each edge, or one on the right.
   property string railsPref: "both"
   property string cortexState: "idle"   // the dictation backend's state
@@ -257,6 +268,15 @@ Item {
   }
 
   FileView {
+    path: root.stateDir + "/look"
+    watchChanges: true
+    printErrors: false
+    onFileChanged: reload()
+    onLoaded: root.lookPref = text()
+    onLoadFailed: root.lookPref = "theme"
+  }
+
+  FileView {
     path: root.stateDir + "/rails"
     watchChanges: true
     printErrors: false
@@ -325,26 +345,59 @@ Item {
     property bool holding: false
     // > 0: tapped() fires on press and then every repeatMs while held (volume).
     property int repeatMs: 0
+    // Controller look: a raised cap (sheen on top, shade below, a shadow under
+    // it) that sinks when pressed. `legend` colours the glyph, as the printed
+    // legends on a pad's buttons are coloured.
+    property bool cap: false
+    property color legend: Color.popups.text
     signal tapped()
     signal held()
 
     readonly property bool lit: active || area.pressed
+    readonly property color capBase: active ? activeColor : Qt.darker(Color.popups.background, 1.25)
     property real fill: lit ? 0.95 : see
     Behavior on fill { NumberAnimation { duration: 120 } }
     implicitWidth: size; implicitHeight: size
     width: size; height: size; radius: size / 2
     color: Qt.alpha(lit ? activeColor : idleColor, fill)
-    border.color: active ? activeColor : Color.popups.border
-    border.width: 2
+    border.color: cap ? Qt.alpha("black", 0.6) : (active ? activeColor : Color.popups.border)
+    border.width: cap ? 1.5 : 2
+    gradient: cap ? capGradient : null
+    scale: cap && area.pressed ? 0.93 : 1.0
+    Behavior on scale { NumberAnimation { duration: 80 } }
+
+    Gradient {
+      id: capGradient
+      // Pressed: the light comes from below, i.e. the cap has gone in.
+      GradientStop { position: 0.0; color: area.pressed ? Qt.darker(b.capBase, 1.35) : Qt.tint(b.capBase, Qt.alpha("white", 0.20)) }
+      GradientStop { position: 0.5; color: b.capBase }
+      GradientStop { position: 1.0; color: area.pressed ? Qt.tint(b.capBase, Qt.alpha("white", 0.08)) : Qt.darker(b.capBase, 1.45) }
+    }
+    Rectangle {       // the shadow the cap throws on the shell
+      visible: b.cap && !area.pressed
+      z: -1
+      width: parent.width; height: parent.height; radius: parent.radius
+      y: 3
+      color: Qt.alpha("black", 0.45)
+    }
+    Rectangle {       // a hairline of light round the cap's rim
+      visible: b.cap
+      anchors.fill: parent
+      anchors.margins: 1.5
+      radius: width / 2
+      color: "transparent"
+      border.width: 1
+      border.color: Qt.alpha("white", 0.10)
+    }
 
     Text {
       anchors.centerIn: parent
       text: b.holding && b.heldGlyph.length > 0 ? b.heldGlyph : b.glyph
-      color: b.lit ? Color.background : Color.popups.text
+      color: b.cap ? (b.active ? Color.background : b.legend) : (b.lit ? Color.background : Color.popups.text)
       font.pixelSize: b.glyphSize
       font.bold: b.boldGlyph
       style: Text.Outline
-      styleColor: b.fill > 0.9 ? "transparent" : b.idleColor
+      styleColor: (b.cap || b.fill > 0.9) ? "transparent" : b.idleColor
     }
 
     MouseArea {
@@ -378,8 +431,10 @@ Item {
     // Rail: the one button filled with the accent colour while idle, so the
     // eye finds it first. Red while listening, pulsing while transcribing.
     property bool prominent: false
+    property bool cap: false           // controller look, see TouchButton
     signal down()
     signal up()
+    readonly property color capBase: listening ? Color.urgent : Color.accent
 
     readonly property bool solid: listening || busy || prominent
     property real fill: (area.pressed || solid) ? 0.95 : see
@@ -387,8 +442,22 @@ Item {
     implicitWidth: size; implicitHeight: size
     width: size; height: size; radius: size / 2
     color: Qt.alpha(listening ? Color.urgent : (solid ? Color.accent : Color.popups.background), fill)
-    border.color: listening ? Color.urgent : (prominent ? Color.accent : Color.popups.border)
-    border.width: 3
+    border.color: cap ? Qt.alpha("black", 0.6) : (listening ? Color.urgent : (prominent ? Color.accent : Color.popups.border))
+    border.width: cap ? 1.5 : 3
+    gradient: cap ? micGradient : null
+    Gradient {
+      id: micGradient
+      GradientStop { position: 0.0; color: area.pressed ? Qt.darker(m.capBase, 1.3) : Qt.lighter(m.capBase, 1.25) }
+      GradientStop { position: 0.5; color: m.capBase }
+      GradientStop { position: 1.0; color: area.pressed ? Qt.lighter(m.capBase, 1.1) : Qt.darker(m.capBase, 1.4) }
+    }
+    Rectangle {
+      visible: m.cap && !area.pressed
+      z: -1
+      width: parent.width; height: parent.height; radius: parent.radius
+      y: 3
+      color: Qt.alpha("black", 0.45)
+    }
     // A filled button has no colour change left to show a press with.
     scale: area.pressed ? 0.9 : 1.0
     Behavior on scale { NumberAnimation { duration: 90 } }
@@ -459,6 +528,8 @@ Item {
     property real flingMin: 12      // notches/s needed to carry on
     property real flingStop: 3
     property real flingTau: 0.33    // s
+    // Controller look: an inset, ridged thumb wheel.
+    property bool cap: false
     signal aim()
     signal wheel(int notches)
 
@@ -476,7 +547,10 @@ Item {
 
     implicitWidth: 50; implicitHeight: 50
     radius: 16
-    color: Qt.alpha(Color.popups.text, area.pressed || fling.running ? 0.16 : 0.07)
+    color: cap ? Qt.darker(Color.popups.background, area.pressed || fling.running ? 1.15 : 1.5)
+               : Qt.alpha(Color.popups.text, area.pressed || fling.running ? 0.16 : 0.07)
+    border.width: cap ? 1.5 : 0
+    border.color: Qt.alpha("black", 0.6)
     Behavior on color { ColorAnimation { duration: 120 } }
 
     Text {
@@ -496,8 +570,8 @@ Item {
       spacing: 6
       rotation: st.horizontal ? 90 : 0
       Repeater {
-        model: 3
-        Rectangle { width: 22; height: 2; radius: 1; color: Qt.alpha(Color.popups.text, 0.45) }
+        model: st.cap ? 9 : 3
+        Rectangle { width: st.cap ? 30 : 22; height: 2; radius: 1; color: Qt.alpha(Color.popups.text, st.cap ? 0.28 : 0.45) }
       }
     }
     Text {
@@ -557,24 +631,33 @@ Item {
     property real level: -1            // 0-1, or -1 when unknown
     property bool off: false           // muted: the fill goes grey
     property int repeatMs: 110
+    property bool cap: false           // controller look, see TouchButton
+    readonly property color body: cap ? Qt.darker(Color.popups.background, 1.25) : Color.popups.background
     signal up()
     signal down()
     signal middle()
 
     readonly property real shown: level < 0 ? 0 : Math.max(0, Math.min(1, level))
-    readonly property color fillColor: Qt.tint(Color.popups.background,
+    readonly property color fillColor: Qt.tint(body,
       Qt.alpha(off ? Color.popups.text : Color.accent, off ? 0.16 : 0.34))
     // Which third is under the finger: 0 top, 1 middle, 2 bottom, -1 none.
     readonly property int pressedThird: upArea.pressed ? 0 : (midArea.pressed ? 1 : (downArea.pressed ? 2 : -1))
     implicitWidth: 50; implicitHeight: 150
     radius: width / 2
-    border.color: Color.popups.border
-    border.width: 2
+    border.color: cap ? Qt.alpha("black", 0.6) : Color.popups.border
+    border.width: cap ? 1.5 : 2
+    Rectangle {
+      visible: rk.cap
+      z: -1
+      width: parent.width; height: parent.height; radius: parent.radius
+      y: 3
+      color: Qt.alpha("black", 0.45)
+    }
     // The fill is the capsule itself, painted with a hard-edged gradient, so
     // it follows the rounded ends instead of poking out of them.
     gradient: Gradient {
-      GradientStop { position: 0.0; color: Color.popups.background }
-      GradientStop { position: Math.max(0.0, 1 - rk.shown - 0.002); color: Color.popups.background }
+      GradientStop { position: 0.0; color: rk.body }
+      GradientStop { position: Math.max(0.0, 1 - rk.shown - 0.002); color: rk.body }
       GradientStop { position: Math.max(0.002, 1 - rk.shown); color: rk.fillColor }
       GradientStop { position: 1.0; color: rk.fillColor }
     }
@@ -643,6 +726,12 @@ Item {
     }
   }
 
+  Gradient {
+    id: shellGradient
+    GradientStop { position: 0.0; color: Qt.lighter(Color.popups.background, 2.2) }
+    GradientStop { position: 1.0; color: Qt.lighter(Color.popups.background, 1.45) }
+  }
+
   // ---------------------------------------------------------------- the rail
   readonly property int railSize: 64
   // Two rails when asked for and the screen is wide; upright, one bar.
@@ -684,10 +773,12 @@ Item {
       anchors.bottomMargin: root.railGap
       anchors.topMargin: rail.upright ? 0 : root.railGap
       anchors.leftMargin: rail.upright ? root.railGap : 0
-      radius: Style.cornerRadius
+      radius: root.controller ? 26 : Style.cornerRadius
       color: Qt.alpha(Color.popups.background, Color.popups.background.a * root.railOpacity)
-      border.color: Color.popups.border
-      border.width: 2
+      // Controller look: a moulded shell, lighter than the caps set into it.
+      gradient: root.controller ? shellGradient : null
+      border.color: root.controller ? Qt.alpha("white", 0.16) : Color.popups.border
+      border.width: root.controller ? 1 : 2
 
       GridLayout {
         anchors.fill: parent
@@ -697,8 +788,11 @@ Item {
         columnSpacing: 10
 
         TouchButton {
+
+          cap: root.controller
           Layout.alignment: Qt.AlignCenter
           glyph: root.closeArmed ? "Close?" : "󰅖"
+          legend: Color.urgent
           glyphSize: root.closeArmed ? 12 : 24
           boldGlyph: root.closeArmed
           active: root.closeArmed
@@ -707,17 +801,21 @@ Item {
         }
 
         TouchButton {
+
+          cap: root.controller
           Layout.alignment: Qt.AlignCenter
           glyph: "󰊓"
           onTapped: root.toggleMaximise()
         }
         TouchButton {
+          cap: root.controller
           Layout.alignment: Qt.AlignCenter
           visible: !root.dual
           glyph: "󰀻"
           onTapped: root.run(["omarchy-menu", "toggle", "apps"])
         }
         TouchButton {
+          cap: root.controller
           Layout.alignment: Qt.AlignCenter
           visible: !root.dual
           glyph: root.stayAwake ? "󰅶" : "󰛊"
@@ -726,6 +824,8 @@ Item {
         }
 
         ScrollStrip {
+
+          cap: root.controller
           Layout.alignment: Qt.AlignCenter
           Layout.fillHeight: !rail.upright
           Layout.fillWidth: rail.upright
@@ -735,12 +835,16 @@ Item {
         }
 
         TouchButton {
+
+          cap: root.controller
           Layout.alignment: Qt.AlignCenter
           glyph: "󰓡"
           onTapped: root.run([root.home + "/.local/bin/tablet-touch", "next-window"])
         }
 
         TouchButton {
+
+          cap: root.controller
           Layout.alignment: Qt.AlignCenter
           glyph: "󰁍"
           heldGlyph: "󰖯"
@@ -757,6 +861,7 @@ Item {
           font.bold: true
         }
         TouchButton {
+          cap: root.controller
           Layout.alignment: Qt.AlignCenter
           glyph: "󰁔"
           heldGlyph: "󰖯"
@@ -766,16 +871,20 @@ Item {
         }
 
         TouchButton {
+
+          cap: root.controller
           Layout.alignment: Qt.AlignCenter
           glyph: "󰌌"
           onTapped: root.run([root.home + "/.local/bin/tablet-osk", "toggle"])
         }
         TouchButton {
+          cap: root.controller
           Layout.alignment: Qt.AlignCenter
           glyph: "󰌑"
           onTapped: root.run(["ydotool", "key", "28:1", "28:0"])
         }
         MicButton {
+          cap: root.controller
           Layout.alignment: Qt.AlignCenter
           visible: root.hasMic
           size: 50
@@ -810,10 +919,12 @@ Item {
       anchors.leftMargin: root.railGap
       anchors.topMargin: root.railGap
       anchors.bottomMargin: root.railGap
-      radius: Style.cornerRadius
+      radius: root.controller ? 26 : Style.cornerRadius
       color: Qt.alpha(Color.popups.background, Color.popups.background.a * root.railOpacity)
-      border.color: Color.popups.border
-      border.width: 2
+      // Controller look: a moulded shell, lighter than the caps set into it.
+      gradient: root.controller ? shellGradient : null
+      border.color: root.controller ? Qt.alpha("white", 0.16) : Color.popups.border
+      border.width: root.controller ? 1 : 2
 
       ColumnLayout {
         anchors.fill: parent
@@ -821,6 +932,8 @@ Item {
         spacing: 10
 
         TouchButton {
+
+          cap: root.controller
           Layout.alignment: Qt.AlignCenter
           glyph: root.stayAwake ? "󰅶" : "󰛊"
           active: root.stayAwake
@@ -831,6 +944,7 @@ Item {
 
         // Brightness and volume, each a rocker that shows its level.
         Rocker {
+          cap: root.controller
           Layout.alignment: Qt.AlignCenter
           glyph: "󰃟"
           level: root.brightness
@@ -838,6 +952,7 @@ Item {
           onDown: root.brightnessStep("5%-")
         }
         Rocker {
+          cap: root.controller
           Layout.alignment: Qt.AlignCenter
           glyph: root.muted ? "󰖁" : "󰕾"
           level: root.volume
@@ -848,6 +963,7 @@ Item {
         }
         // Play / pause; hold for the next track.
         TouchButton {
+          cap: root.controller
           Layout.alignment: Qt.AlignCenter
           glyph: "󰐎"
           heldGlyph: "󰒭"
@@ -859,6 +975,8 @@ Item {
         Item { Layout.fillHeight: true }
 
         TouchButton {
+
+          cap: root.controller
           Layout.alignment: Qt.AlignCenter
           glyph: "󰀻"
           onTapped: root.run(["omarchy-menu", "toggle", "apps"])
