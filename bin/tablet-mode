@@ -21,7 +21,7 @@ Reactions:
                                      controller, cheetah, tiger, arcade, neon, retro,
                                      candy, lava, galaxy, ice, rainbow, unicorn, fairy,
                                      mermaid, dragon, sunset, watermelon, honeybee,
-                                     circuit, pixel
+                                     circuit, pixel, prism
     tablet-mode sounds on|off        a soft tap as a rail button goes down
     tablet-mode dictation on|off     show the mic button at all (needs a dictation
                                      backend: see `tablet-touch` DICTATION)
@@ -34,9 +34,10 @@ import sys
 
 # The rails' looks; must match lookNames in shell/plugins/tablet.rail/Main.qml.
 LOOKS = ("theme", "controller", "cheetah", "tiger", "arcade", "neon", "retro", "candy", "lava", "galaxy", "ice",
-         "rainbow", "unicorn", "fairy", "mermaid", "dragon", "sunset", "watermelon", "honeybee", "circuit", "pixel")
+         "rainbow", "unicorn", "fairy", "mermaid", "dragon", "sunset", "watermelon", "honeybee", "circuit", "pixel", "prism")
 STATE_DIR = os.path.join(os.environ.get("XDG_STATE_HOME", os.path.expanduser("~/.local/state")), "tablet-mode")
-CONF_DIR = os.path.join(os.environ.get("XDG_CONFIG_HOME", os.path.expanduser("~/.config")), "tablet-mode")
+CONF_HOME = os.environ.get("XDG_CONFIG_HOME", os.path.expanduser("~/.config"))
+CONF_DIR = os.path.join(CONF_HOME, "tablet-mode")
 BIN = os.path.expanduser("~/.local/bin/")
 
 
@@ -107,6 +108,70 @@ def watch():
     sys.exit(mon.wait() or 1)   # let systemd restart a dead monitor
 
 
+BAR_OPEN, BAR_CLOSE = "# >>> omarchy-tablet (managed: tablet-mode bar-colors)", "# <<< omarchy-tablet"
+
+
+def bar_mode(skinned):
+    """A bar set to "none" or "glassy" picks its own text colour from the
+    wallpaper behind it, and ignores ours; but a skin's strip is what is behind
+    it now. So while skinned the bar is "opaque" (made see-through by the
+    alpha in bar_colors, with our text colour), and the mode it had is put back
+    afterwards."""
+    keep = os.path.join(STATE_DIR, "bar-background-before")
+    try:
+        if skinned:
+            if not os.path.exists(keep):
+                now = subprocess.run(["omarchy", "bar", "background"], capture_output=True, text=True, timeout=5).stdout.strip()
+                if now in ("opaque", "glassy", "none"):
+                    write(keep, now)
+                    if now != "opaque":
+                        subprocess.run(["omarchy", "bar", "background", "opaque"], capture_output=True, timeout=5)
+        elif os.path.exists(keep):
+            before = read(keep, "")
+            os.remove(keep)
+            if before in ("glassy", "none"):
+                subprocess.run(["omarchy", "bar", "background", before], capture_output=True, timeout=5)
+    except (OSError, subprocess.SubprocessError):
+        pass
+
+
+def bar_colors(text):
+    """Make Omarchy's bar see-through with `text`-coloured writing (a skin's
+    strip is drawn behind it), or put it back ("clear"). Edits only its own
+    marked block in the [bar] section of the machine's shell overrides.
+
+    The marks are lines of their own: a comment after a value is not safe
+    here, since the colours themselves start with "#"."""
+    bar_mode(text != "clear")
+    path = os.path.join(CONF_HOME, "omarchy", "shell.toml")
+    try:
+        lines = open(path).read().splitlines()
+    except OSError:
+        lines = []
+    kept, skipping = [], False
+    for line in lines:
+        if line.strip() == BAR_OPEN:
+            skipping = True
+        elif line.strip() == BAR_CLOSE:
+            skipping = False
+        elif not skipping and not line.rstrip().endswith("# omarchy-tablet"):   # (an earlier format)
+            kept.append(line)
+    if text != "clear":
+        ours = [BAR_OPEN, "background-alpha = 0.0", f'text = "{text}"', BAR_CLOSE]
+        heads = [i for i, l in enumerate(kept) if l.strip() == "[bar]"]
+        if heads:
+            kept[heads[0] + 1:heads[0] + 1] = ours
+        else:
+            kept += ([""] if kept and kept[-1].strip() else []) + ["[bar]"] + ours
+    if kept == lines or (not kept and not os.path.exists(path)):
+        return
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    tmp = path + ".tmp"
+    with open(tmp, "w") as f:
+        f.write("\n".join(kept) + "\n")
+    os.replace(tmp, path)
+
+
 def main():
     cmd = sys.argv[1:] or ["status"]
     if cmd[0] == "set" and len(cmd) == 2:
@@ -123,6 +188,8 @@ def main():
         write(os.path.join(STATE_DIR, "look"), cmd[1])
     elif cmd[0] == "sounds" and len(cmd) == 2 and cmd[1] in ("on", "off"):
         write(os.path.join(STATE_DIR, "sounds"), cmd[1])
+    elif cmd[0] == "bar-colors" and len(cmd) == 2:
+        bar_colors(cmd[1])                 # run by the rail plugin, not by hand
     elif cmd[0] == "dictation" and len(cmd) == 2 and cmd[1] in ("on", "off"):
         write(os.path.join(STATE_DIR, "dictation"), cmd[1])
     elif cmd[0] == "watch":

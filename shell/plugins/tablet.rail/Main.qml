@@ -103,7 +103,7 @@ Item {
   readonly property var lookNames: ["theme", "controller", "cheetah", "tiger", "arcade", "neon",
                                     "retro", "candy", "lava", "galaxy", "ice",
                                     "rainbow", "unicorn", "fairy", "mermaid", "dragon", "sunset",
-                                    "watermelon", "honeybee", "circuit", "pixel"]
+                                    "watermelon", "honeybee", "circuit", "pixel", "prism"]
   function skinFor(name) {
     var bg = Color.popups.background, ac = Color.accent
     switch (name) {
@@ -145,21 +145,30 @@ Item {
     // "pixels" as random blocks); patterns joined with "+" are painted in turn.
     // `rim` gives the shell a thick coloured edge.
     case "rainbow": return {
-        label: "Rainbow", shellTop: "#ff4d4d", shellBottom: "#7a5cff", cap: "#ffffff", legend: "#3a3a4a",
+        label: "Rainbow", shellTop: "#9bdcff", shellBottom: "#e6f7ff", cap: "#ffffff", legend: "#3a6ea5",
+        accent: "#ff5fa2", close: "#e03131", pattern: "wash+chars", ink: "transparent", glow: "transparent",
+        palette: ["#8fd6ff", "#bfe9ff", "#e9f8ff"],
+        chars: ["\ud83c\udf08", "\ud83c\udf08", "\u2601\ufe0f", "\u2b50", "\u2600\ufe0f"] }
+    case "prism": return {
+        label: "Prism", shellTop: "#ff4d4d", shellBottom: "#7a5cff", cap: "#ffffff", legend: "#3a3a4a",
         accent: "#ff3fa4", close: "#e03131", pattern: "bands", ink: "transparent", glow: "transparent",
+        barText: "#1b1c22",
         palette: ["#ff4d4d", "#ff9a3c", "#ffe14d", "#4cd964", "#3fb8ff", "#7a5cff", "#d65cff"] }
     case "unicorn": return {
         label: "Unicorn", shellTop: "#ffd1ec", shellBottom: "#c8f7e4", cap: "#ffffff", legend: "#a25bd6",
-        accent: "#ff7ac8", close: "#e0457b", pattern: "wash+stars", ink: "#ffffff", glow: "#e6ffd700",
-        palette: ["#ffd1ec", "#e3ccff", "#c9e4ff", "#c8f7e4", "#fff3c4"] }
+        accent: "#ff7ac8", close: "#e0457b", pattern: "wash+stars+chars", ink: "#ffffff", glow: "#e6ffd700",
+        palette: ["#ffd1ec", "#e3ccff", "#c9e4ff", "#c8f7e4", "#fff3c4"],
+        chars: ["\ud83e\udd84", "\ud83e\udd84", "\ud83c\udf08", "\u2b50", "\ud83d\udc96"] }
     case "fairy": return {
         label: "Fairy", shellTop: "#2b1055", shellBottom: "#1b8a7a", cap: "#1a0b33", legend: "#ffe9a8",
-        accent: "#3ee6c1", close: "#ff7aa8", pattern: "wash+stars+stars", ink: "#ffe9a8", glow: "#ff9ff3",
-        palette: ["#2b1055", "#4a1f7a", "#1f5f7a", "#1b8a7a"] }
+        accent: "#3ee6c1", close: "#ff7aa8", pattern: "wash+stars+chars", ink: "#ffe9a8", glow: "#ff9ff3",
+        palette: ["#2b1055", "#4a1f7a", "#1f5f7a", "#1b8a7a"],
+        chars: ["\ud83e\uddda", "\ud83e\uddda", "\u2728", "\ud83c\udf44", "\ud83e\udd8b", "\ud83c\udf38"] }
     case "mermaid": return {
         label: "Mermaid", shellTop: "#14c9c0", shellBottom: "#7a5cd6", cap: "#0b2a44", legend: "#aef6ee",
-        accent: "#ff7fd1", close: "#ff6b6b", pattern: "wash+scales", ink: "#59ffffff", glow: "#26000000",
-        palette: ["#14c9c0", "#1e8fd6", "#7a5cd6"] }
+        accent: "#ff7fd1", close: "#ff6b6b", pattern: "wash+scales+chars", ink: "#40ffffff", glow: "#1a000000",
+        palette: ["#14c9c0", "#1e8fd6", "#7a5cd6"],
+        chars: ["\ud83e\udddc", "\ud83e\udddc", "\ud83d\udc1a", "\ud83d\udc20", "\ud83e\udee7", "\u2b50"] }
     case "dragon": return {
         label: "Dragon", shellTop: "#0f3d1e", shellBottom: "#050d08", cap: "#0a1a0f", legend: "#e8c66a",
         accent: "#e03131", close: "#ff5a4d", pattern: "wash+scales", ink: "#80d4af37", glow: "#59000000",
@@ -187,6 +196,44 @@ Item {
   function lookLabel(name) { var k = skinFor(name); return k ? k.label : "Omarchy" }
   readonly property var skin: skinFor(lookPref.trim())
 
+  // THE TOP BAR JOINS IN. With a skin on, Omarchy's bar is made see-through
+  // and a strip in the skin's shell (colour and pattern) is drawn behind it,
+  // so the bar reads as the top of the controller, not a separate thing. The
+  // bar's text is set to whichever of dark or light reads on that shell. Both
+  // go through the machine's own ~/.config/omarchy/shell.toml (`tablet-mode
+  // bar-colors`), and are taken back out with the plain look, with the
+  // keyboard attached, or if the bar is not along the top.
+  property string barPosition: "top"
+  FileView {
+    path: root.home + "/.config/omarchy/shell.json"
+    watchChanges: true
+    printErrors: false
+    onFileChanged: reload()
+    onLoaded: {
+      try { root.barPosition = String((JSON.parse(text()).bar || {}).position || "top") }
+      catch (e) { root.barPosition = "top" }
+    }
+  }
+  readonly property bool barSkinned: noKeyboard && skin !== null && barPosition === "top"
+  // What the bar's text sits on: the top of the shell. No scrim over it: the
+  // strip has to be exactly as bright as the rails it runs into.
+  readonly property color barBase: !skin ? "black"
+    : (skin.palette && skin.pattern.indexOf("wash") >= 0 ? skin.palette[0] : skin.shellTop)
+  readonly property string barText: skin && skin.barText ? skin.barText
+    : ((barBase.r * 0.299 + barBase.g * 0.587 + barBase.b * 0.114) > 0.58 ? "#1b1c22" : "#ffffff")
+  // The frame: how far its inside corners sweep, and its edge line.
+  readonly property int frameRadius: 14
+  // A rim skin keeps its coloured edge. Otherwise the edge is a thin dark seam:
+  // the frame is shaded to fall away into the screen, and a pale line there (as
+  // it was) made a second border round the windows' own.
+  readonly property color frameEdge: !skin ? "transparent" : (skin.rim ? skin.rim : Qt.alpha("black", 0.55))
+  readonly property int frameEdgeWidth: skin && skin.rim ? 3 : 1
+  readonly property string barWanted: barSkinned ? barText : ""
+  onBarWantedChanged: applyBar()
+  function applyBar() {
+    Quickshell.execDetached([home + "/.local/bin/tablet-mode", "bar-colors", barWanted.length > 0 ? barWanted : "clear"])
+  }
+
   // The settings panel (the cog at the top of the left rail; with one rail,
   // hold the stay-awake button). Choices go through `tablet-mode`, which
   // writes the state files this plugin watches, so the command line and the
@@ -204,6 +251,7 @@ Item {
   // QtMultimedia plays it with no start-up lag; it is optional in Qt, so it is
   // loaded at run time and pw-play stands in where it is missing.
   Component.onCompleted: {
+    applyBar()
     try {
       tapSound = Qt.createQmlObject('import QtMultimedia; SoundEffect { volume: 0.35 }', root, "tapSound")
       tapSound.source = "file://" + tapFile
@@ -517,6 +565,17 @@ Item {
       width: parent.width; height: parent.height; radius: parent.radius
       y: 3
       color: Qt.alpha("black", 0.45)
+    }
+    Rectangle {       // the gloss: a soft highlight across the top of the dome
+      visible: b.cap && !area.pressed
+      anchors.horizontalCenter: parent.horizontalCenter
+      y: parent.height * 0.07
+      width: parent.width * 0.62; height: parent.height * 0.34
+      radius: height / 2
+      gradient: Gradient {
+        GradientStop { position: 0.0; color: Qt.alpha("white", 0.26) }
+        GradientStop { position: 1.0; color: Qt.alpha("white", 0.0) }
+      }
     }
     Rectangle {       // a hairline of light round the cap's rim
       visible: b.cap
@@ -889,6 +948,53 @@ Item {
   //   grid      thin lines both ways, a brighter one now and then
   //   ridges    fine horizontal grooves (moulded plastic)
   //   stars     scattered points, a few with a four-point sparkle
+  // Little characters scattered over a skin's shell: mermaids, unicorns,
+  // fairies. They are emoji, and Canvas text is drawn as outlines, which a
+  // colour emoji font does not have (nothing appeared), so each is a Text item
+  // instead. Positions come from a fixed seed, like the patterns.
+  component CharField: Item {
+    id: cf
+    property var chars: []
+    property int seed: 3
+    property bool row: false               // the bar strip: a single row
+    property real keepClear: 0             // no characters within this of the bottom corners
+    clip: true
+    readonly property var spots: {
+      var out = [], w = width, h = height
+      if (chars.length === 0 || w < 8 || h < 8) return out
+      var state = seed * 2654435761 % 4294967296
+      function rnd() {
+        state = (state + 0x6D2B79F5) | 0
+        var t = Math.imul(state ^ (state >>> 15), 1 | state)
+        t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t
+        return ((t ^ (t >>> 14)) >>> 0) / 4294967296
+      }
+      var cell = row ? 46 : 32
+      for (var ky = 0; ky * cell < (row ? 1 : h); ky++) {
+        for (var kx = 0; kx * cell < w; kx++) {
+          var skip = rnd() < (row ? 0.45 : 0.3), ch = chars[Math.floor(rnd() * chars.length)]
+          var jx = (rnd() - 0.5) * 0.6, jy = (rnd() - 0.5) * 0.6, tilt = (rnd() - 0.5) * 34, size = 14 + rnd() * 6
+          var x = (kx + 0.5 + jx) * cell + (ky % 2 ? cell / 2 : 0)
+          var y = row ? h / 2 : (ky + 0.5 + jy) * cell
+          if (skip || y > h - keepClear) continue
+          out.push({ x: x, y: y, ch: ch, tilt: tilt, size: row ? Math.min(size, h * 0.72) : size })
+        }
+      }
+      return out
+    }
+    Repeater {
+      model: cf.spots
+      Text {
+        required property var modelData
+        x: modelData.x - width / 2; y: modelData.y - height / 2
+        text: modelData.ch
+        font.family: "Noto Color Emoji"
+        font.pixelSize: Math.round(modelData.size)
+        rotation: modelData.tilt
+      }
+    }
+  }
+
   component ShellPattern: Canvas {
     id: skin
     property string pattern: "none"
@@ -900,17 +1006,38 @@ Item {
     property color ink: "black"
     property color glow: "white"
     property var palette: []
+    property var chars: []                 // drawn by CharField, not here
+    // Where this piece sits on the screen. The repeating patterns (bands,
+    // dots, grid, ridges, scales, honeycomb) are laid out in SCREEN
+    // coordinates, so they run unbroken from the bar strip into the rails.
+    property real ox: 0
+    property real oy: 0
+    // The bar strip. `base` is painted first (the strip has no rectangle of
+    // its own to colour); "wash" paints only its first colour, the one the
+    // rails start with; and with `frameRail` > 0 the outline is the strip PLUS
+    // a rounded inside corner where it meets each rail, `frameRail` wide,
+    // `frameBar` down: the bar and the rails then read as one moulding.
+    property color base: "transparent"
+    property bool flatWash: false
+    property real frameRail: 0
+    property real frameBar: 0
+    property color edge: "transparent"     // a line along the frame's inside edge
+    property bool shade: true
+    property real soft: 0.72               // how strongly decoration is drawn
+    property real edgeWidth: 1
     onPaletteChanged: requestPaint()
     onWidthChanged: requestPaint()
     onHeightChanged: requestPaint()
     onInkChanged: requestPaint()
     onGlowChanged: requestPaint()
+    onBaseChanged: requestPaint()
+    onEdgeChanged: requestPaint()
     onPatternChanged: requestPaint()
     onVisibleChanged: requestPaint()
     onPaint: {
       var c = getContext("2d"), w = width, h = height
       c.reset()
-      if (!visible || pattern === "none" || w < 4 || h < 4) return
+      if (!visible || w < 4 || h < 4) return
       var state = seed * 2654435761 % 4294967296
       function rnd() {            // mulberry32: small, repeatable
         state = (state + 0x6D2B79F5) | 0
@@ -918,24 +1045,104 @@ Item {
         t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t
         return ((t ^ (t >>> 14)) >>> 0) / 4294967296
       }
+      function mod(a, n) { return ((a % n) + n) % n }
+      var R = h - frameBar                 // the inside corners' radius (frame only)
       c.beginPath()
-      c.moveTo(rTL, 0); c.lineTo(w - rTR, 0); c.arcTo(w, 0, w, rTR, rTR)
-      c.lineTo(w, h - rBR); c.arcTo(w, h, w - rBR, h, rBR)
-      c.lineTo(rBL, h); c.arcTo(0, h, 0, h - rBL, rBL)
-      c.lineTo(0, rTL); c.arcTo(0, 0, rTL, 0, rTL)
+      if (frameRail > 0) {
+        c.moveTo(0, 0); c.lineTo(w, 0); c.lineTo(w, h); c.lineTo(w - frameRail, h)
+        c.arc(w - frameRail - R, h, R, 0, -Math.PI / 2, true)
+        c.lineTo(frameRail + R, frameBar)
+        c.arc(frameRail + R, h, R, -Math.PI / 2, Math.PI, true)
+        c.lineTo(0, h)
+      } else {
+        c.moveTo(rTL, 0); c.lineTo(w - rTR, 0); c.arcTo(w, 0, w, rTR, rTR)
+        c.lineTo(w, h - rBR); c.arcTo(w, h, w - rBR, h, rBR)
+        c.lineTo(rBL, h); c.arcTo(0, h, 0, h - rBL, rBL)
+        c.lineTo(0, rTL); c.arcTo(0, 0, rTL, 0, rTL)
+      }
       c.closePath()
+      c.save()
       c.clip()
-      var x, y, i, k, pal = palette && palette.length ? palette : [ink]
-      var parts = pattern.split("+")
+      if (base.a > 0) { c.fillStyle = base; c.fillRect(0, 0, w, h) }
+      // From here on, screen coordinates.
+      c.translate(-ox, -oy)
+      var X0 = ox, Y0 = oy, X1 = ox + w, Y1 = oy + h
+      var x, y, i, k, r0, pal = palette && palette.length ? palette : [ink]
+      var parts = pattern === "none" ? [] : pattern.split("+")
       for (var pi = 0; pi < parts.length; pi++) {
         var pat = parts[pi]
-        if (pat === "spots") {
+        // What IS the shell's colour is painted at full strength; what
+        // decorates it sits back a little, so the buttons stay in front.
+        var solid = pat === "wash" || pat === "bands" || pat === "pixels"
+        c.globalAlpha = solid ? 1 : soft
+        if (pat === "wash") {
+          var g = c.createLinearGradient(0, Y0, 0, Y1)
+          for (k = 0; k < pal.length; k++) g.addColorStop(pal.length > 1 ? k / (pal.length - 1) : 0, pal[k])
+          c.fillStyle = flatWash ? pal[0] : g
+          c.fillRect(X0, Y0, w, h)
+        } else if (pat === "bands") {
+          var bh = 20, m = 0.7                       // lines  y + m*x = k*bh
+          for (k = Math.floor((Y0 + m * X0) / bh) - 1; k * bh < Y1 + m * X1 + bh; k++) {
+            c.fillStyle = pal[mod(k, pal.length)]
+            c.beginPath()
+            c.moveTo(X0, k * bh - m * X0); c.lineTo(X1, k * bh - m * X1)
+            c.lineTo(X1, (k + 1) * bh - m * X1 + 0.6); c.lineTo(X0, (k + 1) * bh - m * X0 + 0.6)
+            c.closePath(); c.fill()
+          }
+        } else if (pat === "dots") {
+          var ds = 13, dv = ds * 0.87
+          c.fillStyle = ink
+          for (r0 = Math.floor(Y0 / dv) - 1; r0 * dv < Y1 + dv; r0++) {
+            for (x = Math.floor(X0 / ds) * ds - ds + (mod(r0, 2) ? ds / 2 : 0); x < X1 + ds; x += ds) {
+              c.beginPath(); c.arc(x, r0 * dv + ds / 2, 2.6, 0, 6.283); c.fill()
+            }
+          }
+        } else if (pat === "grid") {
+          c.lineWidth = 1
+          for (x = Math.floor(X0 / 16) * 16 + 8; x < X1; x += 16) {
+            c.strokeStyle = ink
+            c.beginPath(); c.moveTo(x + 0.5, Y0); c.lineTo(x + 0.5, Y1); c.stroke()
+          }
+          for (k = Math.floor(Y0 / 16); k * 16 + 8 < Y1; k++) {
+            c.strokeStyle = mod(k, 5) === 2 ? glow : ink
+            c.beginPath(); c.moveTo(X0, k * 16 + 8.5); c.lineTo(X1, k * 16 + 8.5); c.stroke()
+          }
+        } else if (pat === "ridges") {
+          for (y = Math.floor(Y0 / 6) * 6 + 3; y < Y1; y += 6) {
+            c.fillStyle = ink;  c.fillRect(X0, y, w, 1)
+            c.fillStyle = glow; c.fillRect(X0, y + 1, w, 1)
+          }
+        } else if (pat === "scales") {
+          var sr2 = 9, sv = sr2 * 0.95
+          c.lineWidth = 1.3
+          for (r0 = Math.floor(Y0 / sv) - 1; r0 * sv < Y1 + sr2; r0++) {
+            for (x = Math.floor(X0 / (sr2 * 2)) * sr2 * 2 - sr2 * 2 + (mod(r0, 2) ? 0 : sr2); x < X1 + sr2; x += sr2 * 2) {
+              c.beginPath(); c.arc(x, r0 * sv, sr2, 0, 3.1416)
+              c.fillStyle = glow; c.fill()            // each scale shades the one below
+              c.strokeStyle = ink; c.stroke()
+            }
+          }
+        } else if (pat === "hex") {
+          var hr = 8.5, hw = hr * 1.732, hv = hr * 1.5
+          c.strokeStyle = ink; c.lineWidth = 1.4
+          for (r0 = Math.floor(Y0 / hv) - 1; r0 * hv < Y1 + hr * 2; r0++) {
+            for (x = Math.floor(X0 / hw) * hw - hw + (mod(r0, 2) ? hw / 2 : 0); x < X1 + hw; x += hw) {
+              c.beginPath()
+              for (k = 0; k < 6; k++) {
+                var ha = 3.1416 / 6 + k * 3.1416 / 3
+                if (k === 0) c.moveTo(x + hr * Math.cos(ha), r0 * hv + hr * Math.sin(ha))
+                else c.lineTo(x + hr * Math.cos(ha), r0 * hv + hr * Math.sin(ha))
+              }
+              c.closePath(); c.stroke()
+            }
+          }
+        } else if (pat === "spots") {
           var cell = 17
           for (var gy = -1; gy * cell < h + cell; gy++) {
             for (var gx = -1; gx * cell < w + cell; gx++) {
               if (rnd() < 0.16) continue                     // a gap now and then
-              var cx = (gx + 0.5 + (rnd() - 0.5) * 0.8) * cell + (gy % 2 ? cell / 2 : 0)
-              var cy = (gy + 0.5 + (rnd() - 0.5) * 0.8) * cell
+              var cx = X0 + (gx + 0.5 + (rnd() - 0.5) * 0.8) * cell + (gy % 2 ? cell / 2 : 0)
+              var cy = Y0 + (gy + 0.5 + (rnd() - 0.5) * 0.8) * cell
               var r = 3.2 + rnd() * 3.4, n = 7, turn = rnd() * 6.283
               var pts = []
               for (i = 0; i < n; i++) {
@@ -959,57 +1166,41 @@ Item {
           }
         } else if (pat === "stripes") {
           c.fillStyle = ink
-          for (y = -10; y < h + 20; y += 15 + rnd() * 12) {
-            var fromLeft = rnd() < 0.5, len = w * (0.55 + rnd() * 0.5), thick = 3.5 + rnd() * 4.5
-            var x0 = fromLeft ? -2 : w + 2, x1 = fromLeft ? len : w - len
+          var along = w > h * 3                              // the strip: stripes run across it
+          for (var t0 = -10; t0 < (along ? w : h) + 20; t0 += 15 + rnd() * 12) {
+            var span = along ? h : w
+            var fromA = rnd() < 0.5, len = span * (0.55 + rnd() * 0.5), thick = 3.5 + rnd() * 4.5
+            var p0 = fromA ? -2 : span + 2, p1 = fromA ? len : span - len
             var bend = (rnd() - 0.5) * 16, drop = 6 + rnd() * 10
             c.beginPath()
-            c.moveTo(x0, y - thick)
-            c.quadraticCurveTo((x0 + x1) / 2, y + bend - thick * 0.6, x1, y + drop)   // tapers to a point
-            c.quadraticCurveTo((x0 + x1) / 2, y + bend + thick * 0.9, x0, y + thick)
+            if (along) {
+              c.moveTo(X0 + t0 - thick, Y0 + p0)
+              c.quadraticCurveTo(X0 + t0 + bend - thick * 0.6, Y0 + (p0 + p1) / 2, X0 + t0 + drop, Y0 + p1)
+              c.quadraticCurveTo(X0 + t0 + bend + thick * 0.9, Y0 + (p0 + p1) / 2, X0 + t0 + thick, Y0 + p0)
+            } else {
+              c.moveTo(X0 + p0, Y0 + t0 - thick)
+              c.quadraticCurveTo(X0 + (p0 + p1) / 2, Y0 + t0 + bend - thick * 0.6, X0 + p1, Y0 + t0 + drop)
+              c.quadraticCurveTo(X0 + (p0 + p1) / 2, Y0 + t0 + bend + thick * 0.9, X0 + p0, Y0 + t0 + thick)
+            }
             c.closePath()
             c.fill()
           }
         } else if (pat === "confetti") {
           var colours = [ink, glow, "#ffcc00", "#3ddc84"]
           for (i = 0; i < w * h / 190; i++) {
-            x = rnd() * w; y = rnd() * h
             c.save()
-            c.translate(x, y); c.rotate(rnd() * 3.14)
-            c.globalAlpha = 0.55 + rnd() * 0.3
+            c.translate(X0 + rnd() * w, Y0 + rnd() * h); c.rotate(rnd() * 3.14)
+            c.globalAlpha = (0.55 + rnd() * 0.3) * soft
             c.fillStyle = colours[Math.floor(rnd() * colours.length)]
             if (rnd() < 0.5) c.fillRect(-2.2, -1, 4.4, 2)
             else { c.beginPath(); c.arc(0, 0, 1.5, 0, 6.283); c.fill() }
             c.restore()
           }
-        } else if (pat === "dots") {
-          c.fillStyle = ink
-          var step = 13, row = 0
-          for (y = step / 2; y < h; y += step * 0.87, row++) {
-            for (x = (row % 2 ? step : step / 2); x < w; x += step) {
-              c.beginPath(); c.arc(x, y, 2.6, 0, 6.283); c.fill()
-            }
-          }
-        } else if (pat === "grid") {
-          c.lineWidth = 1
-          for (x = 8; x < w; x += 16) {
-            c.strokeStyle = ink
-            c.beginPath(); c.moveTo(x + 0.5, 0); c.lineTo(x + 0.5, h); c.stroke()
-          }
-          for (y = 8, i = 0; y < h; y += 16, i++) {
-            c.strokeStyle = i % 5 === 2 ? glow : ink
-            c.beginPath(); c.moveTo(0, y + 0.5); c.lineTo(w, y + 0.5); c.stroke()
-          }
-        } else if (pat === "ridges") {
-          for (y = 3; y < h; y += 6) {
-            c.fillStyle = ink;  c.fillRect(0, y, w, 1)
-            c.fillStyle = glow; c.fillRect(0, y + 1, w, 1)
-          }
         } else if (pat === "stars") {
           for (i = 0; i < w * h / 210; i++) {
-            x = rnd() * w; y = rnd() * h
+            x = X0 + rnd() * w; y = Y0 + rnd() * h
             var big = rnd() < 0.09, sr = big ? 1.5 : 0.5 + rnd() * 0.9
-            c.globalAlpha = 0.45 + rnd() * 0.55
+            c.globalAlpha = (0.45 + rnd() * 0.55) * soft
             c.fillStyle = rnd() < 0.3 ? glow : ink
             c.beginPath(); c.arc(x, y, sr, 0, 6.283); c.fill()
             if (big) {
@@ -1018,38 +1209,13 @@ Item {
               c.moveTo(x, y - 4.5); c.lineTo(x, y + 4.5); c.stroke()
             }
           }
-          c.globalAlpha = 1
-        }
-        else if (pat === "wash") {
-          var g = c.createLinearGradient(0, 0, 0, h)
-          for (k = 0; k < pal.length; k++) g.addColorStop(pal.length > 1 ? k / (pal.length - 1) : 0, pal[k])
-          c.fillStyle = g
-          c.fillRect(0, 0, w, h)
-        } else if (pat === "bands") {
-          var bh = 20, slope = w * 0.7
-          for (y = -bh, k = 0; y < h + slope + bh; y += bh, k++) {
-            c.fillStyle = pal[k % pal.length]
-            c.beginPath()
-            c.moveTo(0, y); c.lineTo(w, y - slope); c.lineTo(w, y - slope + bh + 0.6); c.lineTo(0, y + bh + 0.6)
-            c.closePath(); c.fill()
-          }
-        } else if (pat === "scales") {
-          var sr2 = 9, row2 = 0
-          c.lineWidth = 1.3
-          for (y = 0; y < h + sr2; y += sr2 * 0.95, row2++) {
-            for (x = (row2 % 2 ? 0 : sr2); x < w + sr2; x += sr2 * 2) {
-              c.beginPath(); c.arc(x, y, sr2, 0, 3.1416)
-              c.fillStyle = glow; c.fill()            // each scale shades the one below
-              c.strokeStyle = ink; c.stroke()
-            }
-          }
         } else if (pat === "seeds") {
           var sc = 19
           for (var sy = 0; sy * sc < h + sc; sy++) {
             for (var sx = 0; sx * sc < w + sc; sx++) {
               if (rnd() < 0.2) continue
               c.save()
-              c.translate((sx + 0.5 + (rnd() - 0.5) * 0.7) * sc + (sy % 2 ? sc / 2 : 0), (sy + 0.5 + (rnd() - 0.5) * 0.7) * sc)
+              c.translate(X0 + (sx + 0.5 + (rnd() - 0.5) * 0.7) * sc + (sy % 2 ? sc / 2 : 0), Y0 + (sy + 0.5 + (rnd() - 0.5) * 0.7) * sc)
               c.rotate((rnd() - 0.5) * 1.2)
               c.beginPath()
               c.moveTo(0, -4.2); c.quadraticCurveTo(3.4, 0.5, 0, 4.6); c.quadraticCurveTo(-3.4, 0.5, 0, -4.2)
@@ -1058,28 +1224,14 @@ Item {
               c.restore()
             }
           }
-        } else if (pat === "hex") {
-          var hr = 8.5, hw = hr * 1.732, row3 = 0
-          c.strokeStyle = ink; c.lineWidth = 1.4
-          for (y = 0; y < h + hr * 2; y += hr * 1.5, row3++) {
-            for (x = (row3 % 2 ? hw / 2 : 0); x < w + hw; x += hw) {
-              c.beginPath()
-              for (k = 0; k < 6; k++) {
-                var ha = 3.1416 / 6 + k * 3.1416 / 3
-                if (k === 0) c.moveTo(x + hr * Math.cos(ha), y + hr * Math.sin(ha))
-                else c.lineTo(x + hr * Math.cos(ha), y + hr * Math.sin(ha))
-              }
-              c.closePath(); c.stroke()
-            }
-          }
         } else if (pat === "traces") {
           c.lineWidth = 1.5; c.lineJoin = "round"
-          for (i = 0; i < h / 22; i++) {
-            x = Math.round(rnd() * w / 8) * 8; y = Math.round(rnd() * h / 8) * 8
+          for (i = 0; i < Math.max(w, h) / 22; i++) {
+            x = X0 + Math.round(rnd() * w / 8) * 8; y = Y0 + Math.round(rnd() * h / 8) * 8
             c.beginPath(); c.moveTo(x, y)
             for (k = 0; k < 3 + Math.floor(rnd() * 3); k++) {
               var step2 = (2 + Math.floor(rnd() * 5)) * 8 * (rnd() < 0.5 ? -1 : 1)
-              if (k % 2) x += step2; else y += Math.abs(step2)
+              if ((k % 2) === (w > h * 3 ? 0 : 1)) x += step2; else y += Math.abs(step2) * (w > h * 3 ? 0.25 : 1)
               c.lineTo(x, y)
             }
             c.strokeStyle = ink; c.stroke()
@@ -1088,14 +1240,38 @@ Item {
           }
         } else if (pat === "pixels") {
           var px = 8
-          for (y = 0; y < h; y += px) {
-            for (x = 0; x < w; x += px) {
+          for (y = Math.floor(Y0 / px) * px; y < Y1; y += px) {
+            for (x = Math.floor(X0 / px) * px; x < X1; x += px) {
               if (rnd() < 0.45) continue
               c.fillStyle = pal[Math.floor(rnd() * pal.length)]
               c.fillRect(x, y, px, px)
             }
           }
         }
+      }
+      c.globalAlpha = 1
+      c.translate(ox, oy)
+      if (frameRail > 0 && shade) {
+        // Light from above: a sheen along the top edge, falling to shadow
+        // where the frame meets the screen. The rails are shaded the same way
+        // across their width, so the whole frame reads as one raised moulding.
+        var sg = c.createLinearGradient(0, 0, 0, frameBar)
+        sg.addColorStop(0, "rgba(255,255,255,0.16)")
+        sg.addColorStop(0.45, "rgba(255,255,255,0)")
+        sg.addColorStop(1, "rgba(0,0,0,0.30)")
+        c.fillStyle = sg; c.fillRect(0, 0, w, frameBar)
+        c.fillStyle = "rgba(0,0,0,0.30)"; c.fillRect(0, frameBar, w, h - frameBar)
+      }
+      c.restore()
+      if (frameRail > 0 && edge.a > 0) {       // the frame's inside edge, round the corners
+        c.strokeStyle = edge; c.lineWidth = edgeWidth
+        var e = edgeWidth / 2
+        c.beginPath()
+        c.moveTo(w - frameRail - e, h)
+        c.arc(w - frameRail - R, h, R - e, 0, -Math.PI / 2, true)
+        c.lineTo(frameRail + R, frameBar + e)
+        c.arc(frameRail + R, h, R - e, -Math.PI / 2, Math.PI, true)
+        c.stroke()
       }
     }
   }
@@ -1147,27 +1323,59 @@ Item {
       anchors.leftMargin: rail.upright ? root.edgeGap : 0
       radius: Style.cornerRadius
       // Controller: square against the screen edges, round towards the windows.
-      topLeftRadius: root.controller ? root.shellRadius : radius
+      // Joined to the bar strip above: no corner there, the strip supplies it.
+      topLeftRadius: root.controller ? (root.barSkinned && !rail.upright ? 0 : root.shellRadius) : radius
       topRightRadius: root.controller ? (rail.upright ? root.shellRadius : 0) : radius
       bottomLeftRadius: root.controller ? (rail.upright ? 0 : root.shellRadius) : radius
       bottomRightRadius: root.controller ? 0 : radius
       color: Qt.alpha(Color.popups.background, Color.popups.background.a * root.railOpacity)
       // Controller look: a moulded shell, lighter than the caps set into it.
       gradient: root.controller ? shellGradient : null
-      border.color: root.controller ? (root.skin.rim ? root.skin.rim : Qt.alpha("white", 0.18)) : Color.popups.border
-      border.width: root.controller ? (root.skin.rim ? 3 : 1) : 2
+      // Joined to the bar: no outline of its own (it would draw a line across
+      // the join); the frame's inside edge is drawn separately instead.
+      border.color: root.controller ? root.frameEdge : Color.popups.border
+      border.width: root.controller ? (root.barSkinned ? 0 : root.frameEdgeWidth) : 2
 
       ShellPattern {
         anchors.fill: parent
-        anchors.margins: root.skin && root.skin.rim ? 3 : 1
+        anchors.margins: root.barSkinned ? 0 : root.frameEdgeWidth
         visible: root.skin !== null
         pattern: root.skin ? root.skin.pattern : "none"
         seed: 11
+        ox: rail.screen ? rail.screen.width - root.railSize : 0
+        oy: Style.bar.sizeHorizontal
         rTL: parent.topLeftRadius; rTR: parent.topRightRadius
         rBR: parent.bottomRightRadius; rBL: parent.bottomLeftRadius
         ink: root.skin ? root.skin.ink : "transparent"
         glow: root.skin ? root.skin.glow : "transparent"
         palette: root.skin && root.skin.palette ? root.skin.palette : []
+      }
+
+      Rectangle {       // light on the outer edge, shadow towards the screen
+        visible: root.skin !== null
+        anchors.fill: parent
+        topLeftRadius: parent.topLeftRadius; topRightRadius: parent.topRightRadius
+        bottomLeftRadius: parent.bottomLeftRadius; bottomRightRadius: parent.bottomRightRadius
+        gradient: Gradient {
+          orientation: Gradient.Horizontal
+          GradientStop { position: 0.0; color: Qt.alpha("black", 0.30) }
+          GradientStop { position: 0.55; color: "transparent" }
+          GradientStop { position: 1.0; color: Qt.alpha("white", 0.14) }
+        }
+      }
+      CharField {
+        anchors.fill: parent
+        visible: root.skin !== null
+        chars: root.skin && root.skin.chars ? root.skin.chars : []
+        seed: 5
+        keepClear: root.shellRadius
+      }
+
+      Rectangle {       // the frame's inside edge, down the rail (joined to the bar only)
+        visible: root.barSkinned && !rail.upright
+        x: 0; y: root.frameRadius
+        width: root.frameEdgeWidth; height: parent.height - root.frameRadius - root.shellRadius
+        color: root.frameEdge
       }
 
       GridLayout {
@@ -1338,27 +1546,58 @@ Item {
       anchors.topMargin: root.edgeGap
       anchors.bottomMargin: root.edgeGap
       radius: Style.cornerRadius
-      topRightRadius: root.controller ? root.shellRadius : radius
+      topRightRadius: root.controller ? (root.barSkinned ? 0 : root.shellRadius) : radius
       bottomRightRadius: root.controller ? root.shellRadius : radius
       topLeftRadius: root.controller ? 0 : radius
       bottomLeftRadius: root.controller ? 0 : radius
       color: Qt.alpha(Color.popups.background, Color.popups.background.a * root.railOpacity)
       // Controller look: a moulded shell, lighter than the caps set into it.
       gradient: root.controller ? shellGradient : null
-      border.color: root.controller ? (root.skin.rim ? root.skin.rim : Qt.alpha("white", 0.18)) : Color.popups.border
-      border.width: root.controller ? (root.skin.rim ? 3 : 1) : 2
+      // Joined to the bar: no outline of its own (it would draw a line across
+      // the join); the frame's inside edge is drawn separately instead.
+      border.color: root.controller ? root.frameEdge : Color.popups.border
+      border.width: root.controller ? (root.barSkinned ? 0 : root.frameEdgeWidth) : 2
 
       ShellPattern {
         anchors.fill: parent
-        anchors.margins: root.skin && root.skin.rim ? 3 : 1
+        anchors.margins: root.barSkinned ? 0 : root.frameEdgeWidth
         visible: root.skin !== null
         pattern: root.skin ? root.skin.pattern : "none"
         seed: 29
+        ox: 0
+        oy: Style.bar.sizeHorizontal
         rTL: parent.topLeftRadius; rTR: parent.topRightRadius
         rBR: parent.bottomRightRadius; rBL: parent.bottomLeftRadius
         ink: root.skin ? root.skin.ink : "transparent"
         glow: root.skin ? root.skin.glow : "transparent"
         palette: root.skin && root.skin.palette ? root.skin.palette : []
+      }
+
+      Rectangle {       // light on the outer edge, shadow towards the screen
+        visible: root.skin !== null
+        anchors.fill: parent
+        topLeftRadius: parent.topLeftRadius; topRightRadius: parent.topRightRadius
+        bottomLeftRadius: parent.bottomLeftRadius; bottomRightRadius: parent.bottomRightRadius
+        gradient: Gradient {
+          orientation: Gradient.Horizontal
+          GradientStop { position: 0.0; color: Qt.alpha("white", 0.14) }
+          GradientStop { position: 0.45; color: "transparent" }
+          GradientStop { position: 1.0; color: Qt.alpha("black", 0.30) }
+        }
+      }
+      CharField {
+        anchors.fill: parent
+        visible: root.skin !== null
+        chars: root.skin && root.skin.chars ? root.skin.chars : []
+        seed: 9
+        keepClear: root.shellRadius
+      }
+
+      Rectangle {
+        visible: root.barSkinned
+        x: parent.width - width; y: root.frameRadius
+        width: root.frameEdgeWidth; height: parent.height - root.frameRadius - root.shellRadius
+        color: root.frameEdge
       }
 
       ColumnLayout {
@@ -1496,6 +1735,48 @@ Item {
     }
   }
 
+  // ------------------------------------------------------- the bar strip
+  PanelWindow {
+    id: barStrip
+    visible: root.barSkinned
+    screen: Quickshell.screens.length > 0 ? Quickshell.screens[0] : null
+    color: "transparent"
+    WlrLayershell.namespace: "omarchy-tablet-bar"
+    // Below the bar (Top) and below the windows: the corner pieces hang down
+    // into the gap at the windows' own rounded corners, and nowhere else.
+    WlrLayershell.layer: WlrLayer.Bottom
+    WlrLayershell.keyboardFocus: WlrKeyboardFocus.None
+    exclusionMode: ExclusionMode.Ignore
+    anchors { top: true; left: true; right: true }
+    implicitHeight: Style.bar.sizeHorizontal + root.frameRadius
+    mask: Region {}                      // never takes a touch
+
+    ShellPattern {
+      anchors.fill: parent
+      visible: root.skin !== null
+      base: root.skin ? root.barBase : "transparent"
+      flatWash: true
+      frameRail: root.dual ? root.railSize : 0.01
+      frameBar: Style.bar.sizeHorizontal
+      edge: root.frameEdge
+      edgeWidth: root.frameEdgeWidth
+      pattern: root.skin ? root.skin.pattern : "none"
+      seed: 47
+      ink: root.skin ? root.skin.ink : "transparent"
+      glow: root.skin ? root.skin.glow : "transparent"
+      palette: root.skin && root.skin.palette ? root.skin.palette : []
+    }
+    CharField {
+      anchors { top: parent.top; left: parent.left; right: parent.right }
+      height: Style.bar.sizeHorizontal
+      visible: root.skin !== null
+      row: true
+      chars: root.skin && root.skin.chars ? root.skin.chars : []
+      seed: 13
+      opacity: 0.55                      // behind the bar's own writing
+    }
+  }
+
   // ------------------------------------------------------------ settings
   PanelWindow {
     id: settingsWin
@@ -1583,6 +1864,14 @@ Item {
                   ink: sw.k ? sw.k.ink : "transparent"
                   glow: sw.k ? sw.k.glow : "transparent"
                   palette: sw.k && sw.k.palette ? sw.k.palette : []
+                  shade: false
+                }
+                CharField {
+                  anchors.fill: parent
+                  anchors.margins: 3
+                  visible: sw.k !== null
+                  chars: sw.k && sw.k.chars ? sw.k.chars : []
+                  seed: 21
                 }
                 Row {
                   anchors.centerIn: parent

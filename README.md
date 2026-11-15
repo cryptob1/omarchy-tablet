@@ -75,18 +75,21 @@ By default the rails are drawn like every other Omarchy surface: your theme's co
 | `lava` | Black and red with glowing embers. |
 | `galaxy` | Deep blue to violet, with stars. |
 | `ice` | Pale blue and white. |
-| `rainbow` | Diagonal rainbow stripes, white caps. |
-| `unicorn` | A pastel rainbow wash with gold and white sparkles. |
-| `fairy` | Twilight purple into teal, thick with fairy dust. |
-| `mermaid` | Teal to violet, in scales. |
+| `rainbow` | Sky blue, scattered with little rainbows, clouds and suns. |
+| `unicorn` | A pastel wash with sparkles, covered in unicorns, hearts and stars. |
+| `fairy` | Twilight purple into teal, with fairies, butterflies, mushrooms and fairy dust. |
+| `mermaid` | Teal to violet scales, with mermaids, shells, fish and bubbles. |
 | `dragon` | Dark green scales edged in gold, red buttons. |
 | `sunset` | Yellow through pink to deep purple. |
 | `watermelon` | Pink with seeds and a green rind. |
 | `honeybee` | Honeycomb yellow with black caps. |
 | `circuit` | A green circuit board with gold solder pads. |
 | `pixel` | Blocky 8-bit blues. |
+| `prism` | Diagonal rainbow stripes, white caps. |
 
 Choose one in the settings panel (the cog at the top of the left rail), or with `tablet-mode look <name>`.
+
+**The bar joins in.** With a controller look on, Omarchy's top bar is drawn in the same shell, pattern and all, and meets the rails in rounded inside corners, so the screen sits in one frame. The bar's writing switches to dark or light to suit. With the plain look, with the keyboard attached, or with the bar somewhere other than the top, the bar is left exactly as your theme has it.
 
 **Button sounds.** `tablet-mode sounds on` (or the settings panel) plays a soft tap as a button goes down. Off by default. The mic never makes one: it would be the first thing your dictation hears.
 
