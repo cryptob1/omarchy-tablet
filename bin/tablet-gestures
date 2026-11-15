@@ -496,7 +496,7 @@ def wheel_notches(travel, emitted, step=SCROLL_STEP):
 # Layer surfaces whose touches are never part of a gesture: a thumb holding the
 # floating mic button plus any other finger on the glass is not a scroll, and a
 # key held on the on-screen keyboard is not a long press.
-IGNORE_LAYERS = ("omarchy-tablet-rail", "wvkbd", "omarchy-tablet-menu")
+IGNORE_LAYERS = ("omarchy-tablet-rail", "wvkbd", "omarchy-tablet-menu", "omarchy-tablet-keys")
 
 
 def ignored_rects(layers, names=IGNORE_LAYERS):

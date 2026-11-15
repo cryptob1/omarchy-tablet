@@ -37,6 +37,8 @@ Reactions:
     tablet-mode keys auto|always|off the key strip in the bottom bezel: with the apps
                                      that have a set of keys (terminals, browsers),
                                      always, or never
+    tablet-mode keyboard split|full  the on-screen keyboard: split under the thumbs
+                                     (the default), or full width (wvkbd)
     tablet-mode sounds on|off        a soft tap as a rail button goes down
     tablet-mode dictation on|off     show the mic button at all (needs a dictation
                                      backend: see `tablet-touch` DICTATION)
@@ -334,6 +336,8 @@ def main():
         write(os.path.join(STATE_DIR, "buttons"), cmd[1])
     elif cmd[0] == "keys" and len(cmd) == 2 and cmd[1] in ("auto", "always", "off"):
         write(os.path.join(STATE_DIR, "keys"), cmd[1])
+    elif cmd[0] == "keyboard" and len(cmd) == 2 and cmd[1] in ("split", "full"):
+        write(os.path.join(STATE_DIR, "keyboard"), cmd[1])
     elif cmd[0] == "sounds" and len(cmd) == 2 and cmd[1] in ("on", "off"):
         write(os.path.join(STATE_DIR, "sounds"), cmd[1])
     elif cmd[0] == "bar-colors" and len(cmd) == 2:

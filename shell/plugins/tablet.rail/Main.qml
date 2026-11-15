@@ -325,6 +325,85 @@ Item {
     onLoadFailed: root.keysPref = "auto"
   }
 
+  // THE THUMB KEYBOARD. An ordinary on-screen keyboard runs the width of the
+  // screen, and on a tablet held by its sides the thumbs reach a third of it:
+  // T, Y, G, H and B are in the middle of nowhere. This one is split. The
+  // letters are in two blocks, one against each rail, under the thumbs; the
+  // digits and symbols, which you reach for less and can put the tablet down
+  // for, are in the middle, all of them at once so there are no layers to
+  // switch. Keys go to the focused app as key presses (ydotool), exactly as
+  // the key strip's do, and no surface here takes the focus.
+  // `tablet-mode keyboard split|full`: this one, or the full-width wvkbd
+  // (which the lock screen always uses; hold the rail's keyboard button for it).
+  property string keyboardPref: "split"
+  property bool kbOpen: false
+  property bool kbShift: false                     // for the next letter only
+  property bool kbCaps: false                      // until tapped again (tap Shift twice)
+  property bool kbCtrl: false                      // for the next key only
+  function kbLetters(text, codes) {
+    var out = []
+    for (var i = 0; i < text.length; i++) out.push({ l: text.charAt(i), c: codes[i], letter: true })
+    return out
+  }
+  function kbSyms(text, codes, shifted) {
+    var out = []
+    for (var i = 0; i < text.length; i++) out.push({ l: text.charAt(i), c: codes[i], s: shifted.charAt(i) === "1" })
+    return out
+  }
+  readonly property var kbLeft: [
+    kbLetters("qwert", [16, 17, 18, 19, 20]),
+    kbLetters("asdfg", [30, 31, 32, 33, 34]),
+    [{ l: "\u21e7", a: "shift" }].concat(kbLetters("zxcvb", [44, 45, 46, 47, 48])),
+    [{ l: "Ctrl", a: "ctrl" }, { l: "Esc", c: 1 }, { l: "Tab", c: 15 }, { l: "", c: 57, w: 3 }]
+  ]
+  readonly property var kbRight: [
+    kbLetters("yuiop", [21, 22, 23, 24, 25]),
+    kbLetters("hjkl", [35, 36, 37, 38]).concat([{ l: "'", c: 40 }]),
+    kbLetters("nm", [49, 50]).concat([{ l: ",", c: 51 }, { l: ".", c: 52 }, { l: "\u232b", c: 14, r: true, w: 2 }]),
+    [{ l: "", c: 57, w: 3 }, { l: "/", c: 53 }, { l: "\u23ce", c: 28, w: 2 }]
+  ]
+  readonly property var kbMiddle: [
+    kbSyms("1234567890", [2, 3, 4, 5, 6, 7, 8, 9, 10, 11], "0000000000"),
+    kbSyms("!@#$%^&*()", [2, 3, 4, 5, 6, 7, 8, 9, 10, 11], "1111111111"),
+    kbSyms("-_=+[]{};:", [12, 12, 13, 13, 26, 27, 26, 27, 39, 39], "0101001101"),
+    kbSyms("`~\\|<>?\"", [41, 41, 43, 43, 51, 52, 53, 40], "01011111").concat([
+      { l: "\u2190", c: 105, r: true }, { l: "\u2192", c: 106, r: true }])
+  ]
+  function kbPress(key) {
+    if (key.a === "shift") {
+      if (kbCaps) { kbCaps = false; kbShift = false }
+      else if (kbShift) { kbCaps = true; kbShift = false }     // a second tap: caps lock
+      else kbShift = true
+      return
+    }
+    if (key.a === "ctrl") { kbCtrl = !kbCtrl; return }
+    var codes = []
+    if (kbCtrl) codes.push(29)
+    if (key.s || (key.letter && (kbShift || kbCaps))) codes.push(42)
+    codes.push(key.c)
+    sendKeys(codes)
+    if (!key.r) { kbShift = false; kbCtrl = false }             // one-shot modifiers are spent
+  }
+  function toggleKeyboard() {
+    if (keyboardPref.trim() === "full") run([home + "/.local/bin/tablet-osk", "toggle"])
+    else kbOpen = !kbOpen
+  }
+  function setKeyboard(v) {
+    keyboardPref = v
+    kbOpen = false
+    run([home + "/.local/bin/tablet-osk", "hide"])
+    run([home + "/.local/bin/tablet-mode", "keyboard", v])
+  }
+  onNoKeyboardChanged: if (!noKeyboard) kbOpen = false        // the real keyboard is back
+  FileView {
+    path: root.stateDir + "/keyboard"
+    watchChanges: true
+    printErrors: false
+    onFileChanged: reload()
+    onLoaded: root.keyboardPref = text()
+    onLoadFailed: root.keyboardPref = "split"
+  }
+
   // TODAY. The calendar button on the left rail: the time and date large
   // enough to read at arm's length, the battery, and the month.
   property bool todayOpen: false
@@ -691,6 +770,7 @@ Item {
     if (settingsOpen) { settingsOpen = false; return }
     if (powerOpen) { powerOpen = false; return }
     if (todayOpen) { todayOpen = false; return }
+    if (kbOpen) { kbOpen = false; return }
     run(["ydotool", "key", "56:1", "105:1", "105:0", "56:0"])
   }
   function goForward() { run(["ydotool", "key", "56:1", "106:1", "106:0", "56:0"]) }
@@ -1300,14 +1380,19 @@ Item {
     property real corner: 0.5
     property string label: ""
     property bool repeats: false
+    property real wide: 0                  // > 0: this wide, whatever the legend
+    property real tall: 34
+    property bool lit: false               // a modifier that is held on (Shift, Ctrl)
+    property int labelSize: 13
     signal hit()
     signal pressedDown()
-    readonly property color base: skin ? skin.cap : Color.popups.background
+    readonly property color base: lit ? (skin ? skin.accent : Color.accent) : (skin ? skin.cap : Color.popups.background)
+    function inkOn(c) { return (c.r * 0.299 + c.g * 0.587 + c.b * 0.114) > 0.6 ? "#1b1c22" : "#ffffff" }
     property real sink: kcArea.pressed ? 1 : 0
     Behavior on sink { NumberAnimation { duration: kc.sink > 0.5 ? 110 : 55 } }
     transform: Translate { y: kc.sink * 2 }
-    implicitWidth: Math.max(46, kcText.implicitWidth + 24)
-    implicitHeight: 34
+    implicitWidth: wide > 0 ? wide : Math.max(46, kcText.implicitWidth + 24)
+    implicitHeight: tall
     radius: corner >= 0.5 ? height / 2 : Math.max(4, height * corner)
     border.width: 1.5
     border.color: skin ? Qt.alpha("black", 0.6) : Color.popups.border
@@ -1329,8 +1414,8 @@ Item {
       id: kcText
       anchors.centerIn: parent
       text: kc.label
-      color: kc.skin ? kc.skin.legend : Color.popups.text
-      font.pixelSize: 13
+      color: kc.lit ? kc.inkOn(kc.base) : (kc.skin ? kc.skin.legend : Color.popups.text)
+      font.pixelSize: kc.labelSize
       font.bold: true
     }
     MouseArea {
@@ -2377,7 +2462,11 @@ Item {
           onPressedDown: root.click()
           Layout.alignment: Qt.AlignCenter
           glyph: "󰌌"
-          onTapped: root.run([root.home + "/.local/bin/tablet-osk", "toggle"])
+          active: root.kbOpen
+          holdMs: 600
+          onTapped: root.toggleKeyboard()
+          // Hold: the other keyboard, the full-width one.
+          onHeld: { root.kbOpen = false; root.run([root.home + "/.local/bin/tablet-osk", "toggle"]) }
         }
 
         TouchButton {
@@ -3018,6 +3107,86 @@ Item {
     }
   }
 
+  // ------------------------------------------------------- thumb keyboard
+  PanelWindow {
+    id: kbWin
+    visible: root.kbOpen && root.noKeyboard
+    screen: Quickshell.screens.length > 0 ? Quickshell.screens[0] : null
+    color: "transparent"
+    // Named for bin/tablet-gestures (which leaves touches on it alone) and for
+    // hypr/omarchy-tablet.lua (which keeps it above Omarchy's panels, so a
+    // Wi-Fi password can be typed into one).
+    WlrLayershell.namespace: "omarchy-tablet-keys"
+    WlrLayershell.layer: WlrLayer.Overlay
+    WlrLayershell.keyboardFocus: WlrKeyboardFocus.None
+    anchors { bottom: true; left: true; right: true }   // the rails' own reserved space insets it
+    readonly property int keyW: 56
+    readonly property int keyH: 46
+    readonly property int gap: 6
+    readonly property int sideW: 6 * keyW + 5 * gap
+    // What is left between the two letter blocks, shared out over ten keys.
+    readonly property int midUnit: Math.min(44, Math.floor((width - 2 * sideW - 52 - 9 * gap) / 10))
+    // Upright there is no room between them: the digits and symbols go above.
+    readonly property bool stacked: midUnit < 32
+    implicitHeight: (stacked ? 8 : 4) * (keyH + gap) + 16
+    exclusiveZone: implicitHeight                   // the windows make room: what you type into stays in view
+
+    Rectangle {
+      anchors.fill: parent
+      topLeftRadius: 14; topRightRadius: 14
+      gradient: Gradient {
+        GradientStop { position: 0.0; color: root.skin ? root.skin.shellTop : Color.popups.background }
+        GradientStop { position: 1.0; color: root.skin ? root.skin.shellBottom : Color.popups.background }
+      }
+      border.width: root.skin ? 0 : 2
+      border.color: Color.popups.border
+      MouseArea { anchors.fill: parent }             // a miss between keys does nothing
+    }
+
+    // The three blocks: letters left, letters right, everything else between.
+    Repeater {
+      model: [
+        { rows: root.kbLeft, side: "left", unit: kbWin.keyW },
+        { rows: root.kbMiddle, side: "middle", unit: kbWin.stacked ? 44 : kbWin.midUnit },
+        { rows: root.kbRight, side: "right", unit: kbWin.keyW }
+      ]
+      Column {
+        id: block
+        required property var modelData
+        spacing: kbWin.gap
+        y: 10 + (kbWin.stacked && modelData.side !== "middle" ? 4 * (kbWin.keyH + kbWin.gap) : 0)
+        x: modelData.side === "left" ? 10
+           : (modelData.side === "right" ? parent.width - width - 10 : (parent.width - width) / 2)
+        Repeater {
+          model: block.modelData.rows
+          Row {
+            id: keyLine
+            required property var modelData
+            spacing: kbWin.gap
+            // The right block's rows end at the rail: short rows keep to that side.
+            anchors.right: block.modelData.side === "right" ? parent.right : undefined
+            Repeater {
+              model: keyLine.modelData
+              KeyCap {
+                required property var modelData
+                skin: root.skin
+                corner: Math.min(root.corner, 0.28)
+                wide: block.modelData.unit * (modelData.w || 1) + kbWin.gap * ((modelData.w || 1) - 1)
+                tall: kbWin.keyH
+                labelSize: block.modelData.side === "middle" ? 15 : 18
+                label: modelData.letter && (root.kbShift || root.kbCaps) ? modelData.l.toUpperCase() : modelData.l
+                lit: (modelData.a === "shift" && (root.kbShift || root.kbCaps)) || (modelData.a === "ctrl" && root.kbCtrl)
+                repeats: !!modelData.r
+                onPressedDown: root.click()
+                onHit: root.kbPress(modelData)
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+
   // --------------------------------------------------------------- today
   PanelWindow {
     id: todayWin
@@ -3454,6 +3623,8 @@ Item {
                 { v: "scallop", l: "Scallop" }, { v: "flame", l: "Flame" }, { v: "saw", l: "Saw" }] },
             { key: "hide", title: "Slide away when idle", narrow: true, options: [
                 { v: "0", l: "Never" }, { v: "10", l: "10 s" }, { v: "30", l: "30 s" }, { v: "60", l: "1 min" }, { v: "300", l: "5 min" }] },
+            { key: "keyboard", title: "Keyboard", options: [
+                { v: "split", l: "Split (thumbs)" }, { v: "full", l: "Full width" }] },
             { key: "keys", title: "Key strip", options: [
                 { v: "auto", l: "For the app" }, { v: "always", l: "Always" }, { v: "off", l: "Off" }] },
             { key: "rails", title: "Rails", options: [{ v: "both", l: "Both sides" }, { v: "right", l: "Right only" }] },
@@ -3464,6 +3635,7 @@ Item {
             required property var modelData
             readonly property string current: modelData.key === "hide" ? String(Math.round(root.railHideMs / 1000))
               : modelData.key === "keys" ? (["always", "off"].indexOf(root.keysPref.trim()) >= 0 ? root.keysPref.trim() : "auto")
+              : modelData.key === "keyboard" ? (root.keyboardPref.trim() === "full" ? "full" : "split")
               : modelData.key === "buttons" ? (root.buttonShapes[root.buttonsPref.trim()] !== undefined ? root.buttonsPref.trim() : "auto")
               : modelData.key === "edge"
               ? (root.edgeNames.indexOf(root.edgePref.trim()) >= 0 ? root.edgePref.trim() : "auto")
@@ -3490,7 +3662,8 @@ Item {
                   anchors.fill: parent
                   enabled: !parent.off
                   onClicked: {
-                    if (sw2.modelData.key === "keys") root.setKeys(parent.modelData.v)
+                    if (sw2.modelData.key === "keyboard") root.setKeyboard(parent.modelData.v)
+                    else if (sw2.modelData.key === "keys") root.setKeys(parent.modelData.v)
                     else if (sw2.modelData.key === "buttons") root.setButtons(parent.modelData.v)
                     else if (sw2.modelData.key === "hide") root.setHide(parent.modelData.v)
                     else if (sw2.modelData.key === "edge") root.setEdge(parent.modelData.v)

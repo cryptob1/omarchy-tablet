@@ -23,6 +23,8 @@ hl.layer_rule({ name = "tablet-osk-above-lock", match = { namespace = "wvkbd" },
 -- a higher `order` sorts a layer earlier, which is further down the stack
 -- (tried 100 first; the keyboard went to the bottom).
 hl.layer_rule({ name = "tablet-osk-on-top", match = { namespace = "wvkbd" }, order = -100 })
+-- The same for the split thumb keyboard (shell plugin tablet.rail).
+hl.layer_rule({ name = "tablet-keys-on-top", match = { namespace = "^omarchy-tablet-keys$" }, order = -100 })
 
 -- The button rail (shell plugin tablet.rail) is a see-through card like
 -- Omarchy's own surfaces. Blur what is behind it whenever blur is on at all
