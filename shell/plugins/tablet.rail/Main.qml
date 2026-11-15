@@ -7,7 +7,7 @@
 //   right, bottom up   mic, enter, NEXT workspace (with the number above
 //                      it), keyboard, switch window, the scroll strip,
 //                      maximise, and close at the top
-//   left, bottom up    launcher, play-pause (hold: next track), PREVIOUS
+//   left, bottom up    back (hold: forward), launcher, play-pause (hold: next track), PREVIOUS
 //                      workspace level with "next" on the right, a volume
 //                      rocker and a brightness rocker (plus / minus, hold to
 //                      repeat, filled to show the level; tap the speaker to
@@ -454,6 +454,10 @@ Item {
   function wsTapped(rel) { run(["hyprctl", "dispatch", 'hl.dsp.focus({ workspace = "' + rel + '" })']) }
   function wsHeld(rel) { run(["hyprctl", "dispatch", 'hl.dsp.window.move({ workspace = "' + rel + '" })']) }
 
+  // Back, as on a phone: Alt+Left to the focused app, which is "back" in
+  // browsers, file managers and most apps with a history. Hold: forward.
+  function goBack() { run(["ydotool", "key", "56:1", "105:1", "105:0", "56:0"]) }
+  function goForward() { run(["ydotool", "key", "56:1", "106:1", "106:0", "56:0"]) }
   // Same toggle as the four-finger swipe: fills the screen, bar and rail stay.
   function toggleMaximise() { run(["hyprctl", "dispatch", 'hl.dsp.window.fullscreen({ mode = "maximized" })']) }
   function micPress() { Quickshell.execDetached([home + "/.local/bin/tablet-touch", "mic-press"]) }
@@ -1896,6 +1900,18 @@ Item {
           glyph: "󰀻"
           onTapped: root.run(["omarchy-menu", "toggle", "apps"])
         }
+        // Back (hold: forward). One rail: beside the launcher.
+        TouchButton {
+          skin: root.skin
+          onPressedDown: root.click()
+          Layout.alignment: Qt.AlignCenter
+          visible: !root.dual
+          glyph: "󰅁"
+          heldGlyph: "󰅂"
+          holdMs: 500
+          onTapped: root.goBack()
+          onHeld: root.goForward()
+        }
         TouchButton {
           skin: root.skin
           onPressedDown: root.click()
@@ -2220,6 +2236,17 @@ Item {
           Layout.alignment: Qt.AlignCenter
           glyph: "󰀻"
           onTapped: root.run(["omarchy-menu", "toggle", "apps"])
+        }
+        // Back (hold: forward). Bottom of the left rail: under the thumb, where a phone has it.
+        TouchButton {
+          skin: root.skin
+          onPressedDown: root.click()
+          Layout.alignment: Qt.AlignCenter
+          glyph: "󰅁"
+          heldGlyph: "󰅂"
+          holdMs: 500
+          onTapped: root.goBack()
+          onHeld: root.goForward()
         }
       }
     }

@@ -58,6 +58,7 @@ Every button's touch target is bigger than the button you see: it reaches out to
 | ‹ | Previous workspace, level with "next" on the right rail, so each direction is under its own thumb. Hold to take the focused window along. |
 | Play / pause | Hold for the next track. |
 | Launcher | Opens the app menu. |
+| Back | Goes back in the focused app, as on a phone (it sends Alt+Left: back in browsers, file managers and most apps with a history). Hold for forward. |
 
 `tablet-mode rails right` puts everything except the media, volume and brightness controls on a single right-hand rail (hold Stay awake there for the settings panel); `tablet-mode rails both` brings the second one back. An upright screen always gets the single rail, along the bottom edge.
 
