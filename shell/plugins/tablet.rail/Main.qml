@@ -3647,17 +3647,24 @@ Item {
       id: sheet
       anchors.centerIn: parent
       width: Math.min(parent.width - 170, 720)
-      height: sheetBody.implicitHeight + 36
+      height: Math.min(sheetBody.implicitHeight + 36, parent.height - 48)
       radius: Math.max(Style.cornerRadius, 14)
       color: Color.popups.background
       border.color: Color.popups.border
       border.width: 2
       MouseArea { anchors.fill: parent }       // taps on the sheet are not "outside"
 
-      ColumnLayout {
-        id: sheetBody
+      // Taller than the screen (it is, in landscape): it scrolls under the finger.
+      Flickable {
+        id: sheetFlick
         anchors.fill: parent
         anchors.margins: 18
+        clip: true
+        contentHeight: sheetBody.implicitHeight
+        boundsBehavior: Flickable.StopAtBounds
+        ColumnLayout {
+        id: sheetBody
+        width: sheetFlick.width
         spacing: 14
 
         RowLayout {
@@ -3824,6 +3831,7 @@ Item {
               }
             }
           }
+        }
         }
       }
     }
