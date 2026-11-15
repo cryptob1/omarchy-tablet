@@ -122,13 +122,13 @@ Item {
         label: "Tiger", shellTop: "#f7a02b", shellBottom: "#d8660a", cap: "#1c130d", legend: "#ffe7c2",
         accent: "#ffd23f", close: "#ff5a4d", pattern: "stripes", ink: "#d91a0f08", glow: "transparent" }
     case "arcade": return {
-        label: "Arcade", shellTop: "#2d2f3d", shellBottom: "#14151c", cap: "#0b0c11", legend: "#f4f4f4",
+        label: "Arcade", shape: "round", shellTop: "#2d2f3d", shellBottom: "#14151c", cap: "#0b0c11", legend: "#f4f4f4",
         accent: "#ffcc00", close: "#ff3b3b", pattern: "confetti", ink: "#ff3b3b", glow: "#2ec4ff" }
     case "neon": return {
-        label: "Neon", shellTop: "#2c1052", shellBottom: "#110423", cap: "#0d0420", legend: "#3ef0ff",
+        label: "Neon", shape: "rounded", shellTop: "#2c1052", shellBottom: "#110423", cap: "#0d0420", legend: "#3ef0ff",
         accent: "#ff2fd0", close: "#ff4f7a", pattern: "grid", ink: "#59ff2fd0", glow: "#803ef0ff" }
     case "retro": return {
-        label: "Retro", shellTop: "#dcd9d2", shellBottom: "#b8b4aa", cap: "#3a393e", legend: "#f3f1ea",
+        label: "Retro", shape: "rounded", shellTop: "#dcd9d2", shellBottom: "#b8b4aa", cap: "#3a393e", legend: "#f3f1ea",
         accent: "#c8102e", close: "#ff6b6b", pattern: "ridges", ink: "#1f000000", glow: "#40ffffff" }
     case "candy": return {
         label: "Candy", shellTop: "#ff9ecf", shellBottom: "#ffc48a", cap: "#fff6fb", legend: "#d6336c",
@@ -186,16 +186,16 @@ Item {
         label: "Honeybee", shellTop: "#ffd43b", shellBottom: "#f5a700", cap: "#1c1a14", legend: "#ffd43b",
         accent: "#fff8dc", close: "#ff6b4d", pattern: "hex", ink: "#73a05a00", glow: "transparent", rim: "#1c1a14" }
     case "circuit": return {
-        label: "Circuit", shellTop: "#0b5d3b", shellBottom: "#063a25", cap: "#04130c", legend: "#7dffb0",
+        label: "Circuit", shape: "rounded", shellTop: "#0b5d3b", shellBottom: "#063a25", cap: "#04130c", legend: "#7dffb0",
         accent: "#d4af37", close: "#ff6b6b", pattern: "traces", ink: "#8c56d98a", glow: "#d4af37" }
     case "pixel": return {
-        label: "Pixel", shellTop: "#2b2f77", shellBottom: "#141852", cap: "#0d0f2e", legend: "#ffffff",
+        label: "Pixel", shape: "square", shellTop: "#2b2f77", shellBottom: "#141852", cap: "#0d0f2e", legend: "#ffffff",
         accent: "#ff4f7a", close: "#ff4f7a", pattern: "pixels", ink: "transparent", glow: "transparent",
         palette: ["#3b43a8", "#4f58c9", "#232765", "#6c75ff"] }
     // Materials. These carry wear: scratches and a dent in the metal, knots
     // and a split in the wood, seams and warning marks on the hull.
     case "metal": return {
-        label: "Metal", shellTop: "#a4adb6", shellBottom: "#626b75", cap: "#272b30", legend: "#e8edf2",
+        label: "Metal", shape: "rounded", shellTop: "#a4adb6", shellBottom: "#626b75", cap: "#272b30", legend: "#e8edf2",
         accent: "#ff8a1f", close: "#ff5a4d", pattern: "brushed+sheen+scratches+rivets",
         ink: "#000000", glow: "#ffffff" }
     case "wood": return {
@@ -203,7 +203,7 @@ Item {
         accent: "#d9a441", close: "#e0553d", pattern: "grain+cracks+sheen",
         ink: "#3a2110", glow: "#d7a06a" }
     case "spaceship": return {
-        label: "Spaceship", shellTop: "#232e3b", shellBottom: "#0d131b", cap: "#090e14", legend: "#7ff3ff",
+        label: "Spaceship", shape: "rounded", shellTop: "#232e3b", shellBottom: "#0d131b", cap: "#090e14", legend: "#7ff3ff",
         accent: "#19e3ff", close: "#ff4d5e", pattern: "panels",
         ink: "#000000", glow: "#19e3ff", barText: "#d8f9ff" }
     }
@@ -380,6 +380,28 @@ Item {
   readonly property var profileTop: shaped ? edgeProfile(edgePref.trim(), spanWidth, 59) : []
   readonly property var profileBottom: shaped ? edgeProfile(edgePref.trim(), spanWidth, 83) : []
   function setEdge(v) { edgePref = v; run([home + "/.local/bin/tablet-mode", "edge", v]) }
+
+  // `tablet-mode buttons auto|round|rounded|square`: the buttons' SHAPE. Round
+  // is not the only shape a button comes in: a hull, a circuit board or a
+  // block of pixels wants corners. "auto" (the default) is each look's own
+  // choice; the others override it for every look. `corner` is the corner
+  // radius as a share of the button's width: 0.5 is a circle.
+  property string buttonsPref: "auto"
+  readonly property var buttonShapes: ({ round: 0.5, rounded: 0.28, square: 0.10 })
+  readonly property real corner: {
+    var want = buttonsPref.trim()
+    if (buttonShapes[want] !== undefined) return buttonShapes[want]
+    return skin && skin.shape && buttonShapes[skin.shape] !== undefined ? buttonShapes[skin.shape] : 0.5
+  }
+  function setButtons(v) { buttonsPref = v; run([home + "/.local/bin/tablet-mode", "buttons", v]) }
+  FileView {
+    path: root.stateDir + "/buttons"
+    watchChanges: true
+    printErrors: false
+    onFileChanged: reload()
+    onLoaded: root.buttonsPref = text()
+    onLoadFailed: root.buttonsPref = "auto"
+  }
 
   // `tablet-mode sounds on|off`: a soft tap as a button goes down.
   property string soundsPref: "off"
@@ -823,6 +845,7 @@ Item {
     // it) that sinks when pressed. `legend` colours the glyph, as the printed
     // legends on a pad's buttons are coloured.
     property var skin: null            // root.skin, or null for the flat look
+    property real corner: 0.5          // corner radius as a share of the width (root.corner)
     readonly property bool cap: skin !== null
     property bool danger: false        // its legend is the skin's warning colour (close)
     // The colour it turns when active: the skin's accent, unless the button
@@ -847,7 +870,7 @@ Item {
     property real fill: lit ? 0.95 : see
     Behavior on fill { NumberAnimation { duration: 120 } }
     implicitWidth: size; implicitHeight: size
-    width: size; height: size; radius: size / 2
+    width: size; height: size; radius: size * corner
     color: Qt.alpha(lit ? activeColor : idleColor, fill)
     border.color: cap ? Qt.alpha("black", 0.6) : (active ? activeColor : Color.popups.border)
     border.width: cap ? 1.5 : 2
@@ -871,7 +894,7 @@ Item {
       visible: b.cap  // upper lip is in shadow, its lower lip catches the light.
       z: -2
       anchors.centerIn: parent
-      width: parent.width + 8; height: parent.height + 8; radius: width / 2
+      width: parent.width + 8; height: parent.height + 8; radius: width * b.corner
       transform: Translate { y: -b.sink * b.travel }     // the socket does not move
       gradient: Gradient {
         GradientStop { position: 0.0; color: Qt.alpha("black", 0.62) }
@@ -893,7 +916,7 @@ Item {
       anchors.horizontalCenter: parent.horizontalCenter
       y: parent.height * 0.07
       width: parent.width * 0.62; height: parent.height * 0.34
-      radius: height / 2
+      radius: Math.min(height / 2, Math.max(2, parent.radius * 0.7))
       gradient: Gradient {
         GradientStop { position: 0.0; color: Qt.alpha("white", 0.26) }
         GradientStop { position: 1.0; color: Qt.alpha("white", 0.0) }
@@ -903,7 +926,7 @@ Item {
       visible: b.cap
       anchors.fill: parent
       anchors.margins: 1.5
-      radius: width / 2
+      radius: Math.max(1, parent.radius - 1.5)
       color: "transparent"
       border.width: 1
       border.color: Qt.alpha("white", 0.10)
@@ -960,6 +983,7 @@ Item {
     // eye finds it first. Red while listening, pulsing while transcribing.
     property bool prominent: false
     property var skin: null            // see TouchButton
+    property real corner: 0.5
     readonly property bool cap: skin !== null
     signal down()
     signal up()
@@ -970,7 +994,7 @@ Item {
     property real fill: (area.pressed || solid) ? 0.95 : see
     Behavior on fill { NumberAnimation { duration: 120 } }
     implicitWidth: size; implicitHeight: size
-    width: size; height: size; radius: size / 2
+    width: size; height: size; radius: size * corner
     color: Qt.alpha(listening ? Color.urgent : (solid ? Color.accent : Color.popups.background), fill)
     border.color: cap ? Qt.alpha("black", 0.6) : (listening ? Color.urgent : (prominent ? Color.accent : Color.popups.border))
     border.width: cap ? 1.5 : 3
@@ -985,7 +1009,7 @@ Item {
       visible: m.cap
       z: -2
       anchors.centerIn: parent
-      width: parent.width + 8; height: parent.height + 8; radius: width / 2
+      width: parent.width + 8; height: parent.height + 8; radius: width * m.corner
       transform: Translate { y: -m.sink * 3 }
       gradient: Gradient {
         GradientStop { position: 0.0; color: Qt.alpha("black", 0.62) }
@@ -1020,7 +1044,7 @@ Item {
     // Breathing ring while the mic is hot, so it is obvious from a distance.
     Rectangle {
       anchors.centerIn: parent
-      width: parent.width; height: parent.height; radius: width / 2
+      width: parent.width; height: parent.height; radius: parent.radius
       color: "transparent"
       border.color: Color.urgent
       border.width: 3
@@ -1079,6 +1103,7 @@ Item {
     property real flingTau: 0.33    // s
     // Controller look: an inset, ridged thumb wheel.
     property var skin: null            // see TouchButton
+    property real corner: 0.5
     readonly property bool cap: skin !== null
     readonly property color mark: skin ? skin.legend : Color.popups.text
     signal aim()
@@ -1097,7 +1122,7 @@ Item {
     }
 
     implicitWidth: 50; implicitHeight: 50
-    radius: 16
+    radius: corner >= 0.5 ? 16 : Math.max(4, width * corner)
     color: cap ? Qt.darker(skin.cap, area.pressed || fling.running ? 1.0 : 1.22)
                : Qt.alpha(Color.popups.text, area.pressed || fling.running ? 0.16 : 0.07)
     border.width: cap ? 1.5 : 0
@@ -1195,6 +1220,7 @@ Item {
     property bool off: false           // muted: the fill goes grey
     property int repeatMs: 110
     property var skin: null            // see TouchButton
+    property real corner: 0.5
     readonly property bool cap: skin !== null
     readonly property color body: skin ? skin.cap : Color.popups.background
     readonly property color mark: skin ? skin.legend : Color.popups.text
@@ -1210,14 +1236,14 @@ Item {
     // Which third is under the finger: 0 top, 1 middle, 2 bottom, -1 none.
     readonly property int pressedThird: upArea.pressed ? 0 : (midArea.pressed ? 1 : (downArea.pressed ? 2 : -1))
     implicitWidth: 50; implicitHeight: 120
-    radius: width / 2
+    radius: width * corner
     border.color: cap ? Qt.alpha("black", 0.6) : Color.popups.border
     border.width: cap ? 1.5 : 2
     Rectangle {       // the socket (see TouchButton)
       visible: rk.cap
       z: -2
       anchors.centerIn: parent
-      width: parent.width + 8; height: parent.height + 8; radius: width / 2
+      width: parent.width + 8; height: parent.height + 8; radius: width * rk.corner
       gradient: Gradient {
         GradientStop { position: 0.0; color: Qt.alpha("black", 0.62) }
         GradientStop { position: 0.5; color: Qt.alpha("black", 0.28) }
@@ -2035,6 +2061,7 @@ Item {
         TouchButton {
 
           skin: root.skin
+          corner: root.corner
 
           onPressedDown: root.click()
           Layout.alignment: Qt.AlignCenter
@@ -2050,6 +2077,7 @@ Item {
         TouchButton {
 
           skin: root.skin
+          corner: root.corner
 
           onPressedDown: root.click()
           Layout.alignment: Qt.AlignCenter
@@ -2059,6 +2087,7 @@ Item {
 
         TouchButton {
           skin: root.skin
+          corner: root.corner
           onPressedDown: root.click()
           Layout.alignment: Qt.AlignCenter
           visible: !root.dual
@@ -2071,6 +2100,7 @@ Item {
         }
         TouchButton {
           skin: root.skin
+          corner: root.corner
           onPressedDown: root.click()
           Layout.alignment: Qt.AlignCenter
           visible: !root.dual
@@ -2083,6 +2113,7 @@ Item {
 
         TouchButton {
           skin: root.skin
+          corner: root.corner
           onPressedDown: root.click()
           Layout.alignment: Qt.AlignCenter
           visible: !root.dual
@@ -2096,7 +2127,7 @@ Item {
         Rectangle {
           Layout.alignment: Qt.AlignCenter
           implicitWidth: 30; implicitHeight: 22
-          radius: 11
+          radius: 22 * root.corner
           // On a skin the number sits on a chip of cap colour: a bare number
           // is lost on a patterned shell.
           color: root.skin ? root.skin.cap : "transparent"
@@ -2115,6 +2146,7 @@ Item {
         ScrollStrip {
 
           skin: root.skin
+          corner: root.corner
           Layout.alignment: Qt.AlignCenter
           Layout.fillHeight: !rail.upright
           Layout.fillWidth: rail.upright
@@ -2129,6 +2161,7 @@ Item {
 
         MicButton {
           skin: root.skin
+          corner: root.corner
           Layout.alignment: Qt.AlignCenter
           visible: root.hasMic
           size: 50
@@ -2141,6 +2174,7 @@ Item {
 
         TouchButton {
           skin: root.skin
+          corner: root.corner
           onPressedDown: root.click()
           Layout.alignment: Qt.AlignCenter
           glyph: "󰌑"
@@ -2150,6 +2184,7 @@ Item {
         TouchButton {
 
           skin: root.skin
+          corner: root.corner
 
           onPressedDown: root.click()
           Layout.alignment: Qt.AlignCenter
@@ -2163,6 +2198,7 @@ Item {
 
         TouchButton {
           skin: root.skin
+          corner: root.corner
           onPressedDown: root.click()
           Layout.alignment: Qt.AlignCenter
           glyph: "󰁔"
@@ -2174,6 +2210,7 @@ Item {
 
         TouchButton {
           skin: root.skin
+          corner: root.corner
           onPressedDown: root.click()
           Layout.alignment: Qt.AlignCenter
           visible: !root.dual
@@ -2186,6 +2223,7 @@ Item {
 
         TouchButton {
           skin: root.skin
+          corner: root.corner
           onPressedDown: root.click()
           Layout.alignment: Qt.AlignCenter
           visible: !root.dual
@@ -2199,6 +2237,7 @@ Item {
         TouchButton {
 
           skin: root.skin
+          corner: root.corner
 
           onPressedDown: root.click()
           Layout.alignment: Qt.AlignCenter
@@ -2209,6 +2248,7 @@ Item {
         TouchButton {
 
           skin: root.skin
+          corner: root.corner
 
           onPressedDown: root.click()
           Layout.alignment: Qt.AlignCenter
@@ -2343,6 +2383,7 @@ Item {
         // rail, and paste and play / pause in the corner, the least easy place.
         TouchButton {
           skin: root.skin
+          corner: root.corner
           onPressedDown: root.click()
           Layout.alignment: Qt.AlignCenter
           glyph: "󰐥"
@@ -2353,6 +2394,7 @@ Item {
         }
         TouchButton {
           skin: root.skin
+          corner: root.corner
           onPressedDown: root.click()
           Layout.alignment: Qt.AlignCenter
           glyph: "󰒓"
@@ -2362,6 +2404,7 @@ Item {
 
         TouchButton {
           skin: root.skin
+          corner: root.corner
           onPressedDown: root.click()
           Layout.alignment: Qt.AlignCenter
           glyph: "󰑨"
@@ -2374,6 +2417,7 @@ Item {
         TouchButton {
 
           skin: root.skin
+          corner: root.corner
 
           onPressedDown: root.click()
           Layout.alignment: Qt.AlignCenter
@@ -2386,6 +2430,7 @@ Item {
 
         Rocker {
           skin: root.skin
+          corner: root.corner
           onPressedDown: root.click()
           Layout.alignment: Qt.AlignCenter
           glyph: "󰃟"
@@ -2396,6 +2441,7 @@ Item {
 
         Rocker {
           skin: root.skin
+          corner: root.corner
           onPressedDown: root.click()
           Layout.alignment: Qt.AlignCenter
           glyph: root.muted ? "󰖁" : "󰕾"
@@ -2408,6 +2454,7 @@ Item {
 
         TouchButton {
           skin: root.skin
+          corner: root.corner
           onPressedDown: root.click()
           Layout.alignment: Qt.AlignCenter
           glyph: "󰅁"
@@ -2420,6 +2467,7 @@ Item {
         TouchButton {
 
           skin: root.skin
+          corner: root.corner
 
           onPressedDown: root.click()
           Layout.alignment: Qt.AlignCenter
@@ -2432,6 +2480,7 @@ Item {
 
         TouchButton {
           skin: root.skin
+          corner: root.corner
           onPressedDown: root.click()
           Layout.alignment: Qt.AlignCenter
           glyph: "󰁍"
@@ -2443,6 +2492,7 @@ Item {
 
         TouchButton {
           skin: root.skin
+          corner: root.corner
           onPressedDown: root.click()
           Layout.alignment: Qt.AlignCenter
           glyph: "󰆒"
@@ -2454,6 +2504,7 @@ Item {
 
         TouchButton {
           skin: root.skin
+          corner: root.corner
           onPressedDown: root.click()
           Layout.alignment: Qt.AlignCenter
           glyph: "󰐎"
@@ -3074,7 +3125,10 @@ Item {
                     model: 3
                     Rectangle {
                       required property int index
-                      width: 22; height: 22; radius: 11
+                      width: 22; height: 22
+                      // The miniature's buttons take the shape that look would have.
+                      radius: 22 * (root.buttonShapes[root.buttonsPref.trim()] !== undefined ? root.buttonShapes[root.buttonsPref.trim()]
+                                    : (sw.k && sw.k.shape ? root.buttonShapes[sw.k.shape] : 0.5))
                       color: sw.k ? (index === 2 ? sw.k.accent : sw.k.cap)
                                   : (index === 2 ? Color.accent : Color.popups.background)
                       border.width: sw.k ? 1.5 : 2
@@ -3101,6 +3155,8 @@ Item {
             { key: "rotation", title: "Screen", options: [
                 { v: "landscape", l: "Landscape" }, { v: "portrait", l: "Portrait" },
                 { v: "auto", l: root.canAuto ? "Auto-rotate" : "Auto (no sensor)", off: !root.canAuto }] },
+            { key: "buttons", title: "Buttons", narrow: true, options: [
+                { v: "auto", l: "Look's own" }, { v: "round", l: "Round" }, { v: "rounded", l: "Rounded" }, { v: "square", l: "Square" }] },
             { key: "edge", title: "Edge", narrow: true, options: [
                 { v: "straight", l: "Straight" }, { v: "lightning", l: "Lightning" }, { v: "wave", l: "Wave" },
                 { v: "scallop", l: "Scallop" }, { v: "flame", l: "Flame" }, { v: "saw", l: "Saw" }] },
@@ -3113,6 +3169,7 @@ Item {
             id: sw2
             required property var modelData
             readonly property string current: modelData.key === "hide" ? String(Math.round(root.railHideMs / 1000))
+              : modelData.key === "buttons" ? (root.buttonShapes[root.buttonsPref.trim()] !== undefined ? root.buttonsPref.trim() : "auto")
               : modelData.key === "edge"
               ? (root.edgeNames.indexOf(root.edgePref.trim()) >= 0 ? root.edgePref.trim() : "straight")
               : modelData.key === "rotation" ? root.rotationPref.trim()
@@ -3138,7 +3195,8 @@ Item {
                   anchors.fill: parent
                   enabled: !parent.off
                   onClicked: {
-                    if (sw2.modelData.key === "hide") root.setHide(parent.modelData.v)
+                    if (sw2.modelData.key === "buttons") root.setButtons(parent.modelData.v)
+                    else if (sw2.modelData.key === "hide") root.setHide(parent.modelData.v)
                     else if (sw2.modelData.key === "edge") root.setEdge(parent.modelData.v)
                     else if (sw2.modelData.key === "rotation") root.setRotation(parent.modelData.v)
                     else if (sw2.modelData.key === "rails") root.setRails(parent.modelData.v)
