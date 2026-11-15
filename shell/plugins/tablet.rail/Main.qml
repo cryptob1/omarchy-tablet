@@ -439,7 +439,7 @@ Item {
   property real slide: railsShown ? 1 : 0          // 1: in place, 0: off the edge
   Behavior on slide { NumberAnimation { duration: 260; easing.type: Easing.OutCubic } }
   // Whether the rails may slide away at all right now.
-  readonly property bool railHideAllowed: noKeyboard && railHideMs > 0 && !listening && !busy && !settingsOpen && !drawerOpen
+  readonly property bool railHideAllowed: noKeyboard && railHideMs > 0 && !listening && !busy && !settingsOpen && !drawerOpen && !powerOpen
   // (Re)start the countdown, or stop it. The timer is only ever driven from
   // here: calling restart() on a Timer whose `running` is a binding starts it
   // whatever the binding says, and with "never" that hid the rails one second
@@ -536,12 +536,55 @@ Item {
     }
   }
 
+  // POWER. The button at the top of the left rail opens a small sheet: lock,
+  // sleep, restart, shut down. Restart and shut down ask first (a second tap
+  // on the same button), like close does; they go through `omarchy-system`,
+  // which closes applications properly before it acts.
+  property bool powerOpen: false
+  property string powerArmed: ""                  // "reboot" | "shutdown" | ""
+  Timer { id: powerArmTimer; interval: 4000; onTriggered: root.powerArmed = "" }
+  onPowerOpenChanged: { powerArmed = ""; powerArmTimer.stop() }
+  function powerDo(what) {
+    if (what === "lock") { powerOpen = false; run(["omarchy-system-lock"]) }
+    else if (what === "sleep") { powerOpen = false; run(["systemctl", "suspend"]) }
+    else if (powerArmed === what) { powerOpen = false; run(["omarchy-system", what]) }
+    else { powerArmed = what; powerArmTimer.restart() }
+  }
+
+  // LOAD. How hard the machine is working, shown as two hairlines in the
+  // bottom bezel: processor on the left half, memory on the right. Faint by
+  // design: they are there when you look for them and not otherwise, and turn
+  // the look's warning colour above `loadHot`. Read every few seconds from
+  // `omarchy-system-stats`, and only while the bezel is showing.
+  property real cpuLoad: -1
+  property real memLoad: -1
+  readonly property real loadHot: 0.85
+  Process {
+    id: loadProbe
+    command: ["omarchy-system-stats"]
+    stdout: SplitParser {
+      onRead: (line) => {
+        var text = String(line), m
+        if ((m = text.match(/^cpu\s+([\d.]+)%/))) root.cpuLoad = Number(m[1]) / 100
+        else if ((m = text.match(/^memory\s+([\d.]+)\s*\w*\s*\/\s*([\d.]+)/))) root.memLoad = Number(m[2]) > 0 ? Number(m[1]) / Number(m[2]) : -1
+      }
+    }
+  }
+  Timer {
+    interval: 4000
+    repeat: true
+    triggeredOnStart: true
+    running: root.framed
+    onTriggered: if (!loadProbe.running) loadProbe.running = true
+  }
+
   // Back, as on a phone: Alt+Left to the focused app, which is "back" in
   // browsers, file managers and most apps with a history. Hold: forward.
   function goBack() {
     // First of all, out of whatever of ours is open: that is what Back means.
     if (drawerOpen) { drawerOpen = false; return }
     if (settingsOpen) { settingsOpen = false; return }
+    if (powerOpen) { powerOpen = false; return }
     run(["ydotool", "key", "56:1", "105:1", "105:0", "56:0"])
   }
   function goForward() { run(["ydotool", "key", "56:1", "106:1", "106:0", "56:0"]) }
@@ -1166,7 +1209,7 @@ Item {
       Qt.alpha(off ? mark : hot, off ? 0.18 : 0.42))
     // Which third is under the finger: 0 top, 1 middle, 2 bottom, -1 none.
     readonly property int pressedThird: upArea.pressed ? 0 : (midArea.pressed ? 1 : (downArea.pressed ? 2 : -1))
-    implicitWidth: 50; implicitHeight: 150
+    implicitWidth: 50; implicitHeight: 120
     radius: width / 2
     border.color: cap ? Qt.alpha("black", 0.6) : Color.popups.border
     border.width: cap ? 1.5 : 2
@@ -2026,6 +2069,17 @@ Item {
           heldGlyph: "󰒓"
           onHeld: root.settingsOpen = true
         }
+        TouchButton {
+          skin: root.skin
+          onPressedDown: root.click()
+          Layout.alignment: Qt.AlignCenter
+          visible: !root.dual
+          glyph: "󰐥"
+          danger: true
+          active: root.powerOpen
+          activeColor: Color.urgent
+          onTapped: root.powerOpen = !root.powerOpen
+        }
 
         TouchButton {
           skin: root.skin
@@ -2291,6 +2345,16 @@ Item {
           skin: root.skin
           onPressedDown: root.click()
           Layout.alignment: Qt.AlignCenter
+          glyph: "󰐥"
+          danger: true
+          active: root.powerOpen
+          activeColor: Color.urgent
+          onTapped: root.powerOpen = !root.powerOpen
+        }
+        TouchButton {
+          skin: root.skin
+          onPressedDown: root.click()
+          Layout.alignment: Qt.AlignCenter
           glyph: "󰒓"
           active: root.settingsOpen
           onTapped: root.settingsOpen = !root.settingsOpen
@@ -2549,6 +2613,30 @@ Item {
       ink: root.skin ? root.skin.ink : "transparent"
       glow: root.skin ? root.skin.glow : "transparent"
     }
+
+    // The load hairlines (see LOAD): a dark groove with a lit part in it.
+    Repeater {
+      model: 2
+      Item {
+        id: meter
+        required property int index
+        readonly property real load: index === 0 ? root.cpuLoad : root.memLoad
+        readonly property real span: (parent.width - 2 * root.railSize - 120) / 2
+        visible: root.framed && load >= 0
+        x: root.railSize + 40 + index * (span + 40)
+        y: root.frameRadius + (root.bezel - 3) / 2
+        width: span; height: 3
+        Rectangle { anchors.fill: parent; radius: 1.5; color: Qt.alpha("black", 0.38) }
+        Rectangle {
+          height: parent.height; radius: 1.5
+          width: Math.max(3, parent.width * Math.max(0, Math.min(1, meter.load)))
+          color: meter.load >= root.loadHot ? (root.skin ? root.skin.close : Color.urgent)
+                                            : (root.skin ? root.skin.accent : Color.accent)
+          opacity: meter.load >= root.loadHot ? 0.95 : 0.6
+          Behavior on width { NumberAnimation { duration: 600; easing.type: Easing.OutCubic } }
+        }
+      }
+    }
   }
 
   // The screen sits BELOW the frame's surface, and this is what says so: where
@@ -2680,6 +2768,65 @@ Item {
         // The lip: light catching the edge where the frame turns down.
         c.strokeStyle = "rgba(255,255,255,0.38)"; c.lineWidth = 1
         ring(-0.5, rad); c.stroke()
+      }
+    }
+  }
+
+  // --------------------------------------------------------------- power
+  PanelWindow {
+    id: powerWin
+    visible: root.powerOpen
+    screen: Quickshell.screens.length > 0 ? Quickshell.screens[0] : null
+    color: Qt.alpha("black", 0.35)
+    WlrLayershell.namespace: "omarchy-tablet-menu"
+    WlrLayershell.layer: WlrLayer.Overlay
+    WlrLayershell.keyboardFocus: WlrKeyboardFocus.None
+    exclusionMode: ExclusionMode.Ignore
+    anchors { top: true; bottom: true; left: true; right: true }
+    MouseArea { anchors.fill: parent; onClicked: root.powerOpen = false }      // tap outside: never mind
+
+    Rectangle {
+      // Beside the button that opened it: the top of the left rail (or, with
+      // one rail, the middle of the screen).
+      x: root.dual && !root.upright ? root.railSize + 14 : (parent.width - width) / 2
+      y: root.dual && !root.upright ? Style.bar.sizeHorizontal + 10 : (parent.height - height) / 2
+      width: 300
+      height: powerList.implicitHeight + 28
+      radius: Math.max(Style.cornerRadius, 14)
+      color: Color.popups.background
+      border.color: Color.popups.border
+      border.width: 2
+      MouseArea { anchors.fill: parent }
+
+      Column {
+        id: powerList
+        anchors { left: parent.left; right: parent.right; top: parent.top; margins: 14 }
+        spacing: 8
+        Repeater {
+          model: [
+            { what: "lock", glyph: "󰌾", label: "Lock" },
+            { what: "sleep", glyph: "󰤄", label: "Sleep" },
+            { what: "reboot", glyph: "󰜉", label: "Restart", again: "Tap again to restart" },
+            { what: "shutdown", glyph: "󰐥", label: "Shut down", again: "Tap again to shut down" }
+          ]
+          Rectangle {
+            id: powerRow
+            required property var modelData
+            readonly property bool armed: root.powerArmed === modelData.what
+            width: powerList.width; height: 56; radius: 14
+            color: armed ? Color.urgent : (powerRowArea.pressed ? Qt.alpha(Color.accent, 0.35) : Qt.alpha(Color.popups.text, 0.07))
+            Row {
+              anchors { left: parent.left; leftMargin: 16; verticalCenter: parent.verticalCenter }
+              spacing: 14
+              Text { text: powerRow.modelData.glyph; font.pixelSize: 24; anchors.verticalCenter: parent.verticalCenter
+                     color: powerRow.armed ? Color.background : Color.popups.text }
+              Text { text: powerRow.armed ? powerRow.modelData.again : powerRow.modelData.label
+                     font.pixelSize: 16; font.bold: powerRow.armed; anchors.verticalCenter: parent.verticalCenter
+                     color: powerRow.armed ? Color.background : Color.popups.text }
+            }
+            MouseArea { id: powerRowArea; anchors.fill: parent; onPressed: root.click(); onClicked: root.powerDo(powerRow.modelData.what) }
+          }
+        }
       }
     }
   }

@@ -75,6 +75,7 @@ The order is set by how a tablet of this size is held. It has weight, so you gri
 
 | Button | Does |
 |---|---|
+| Power | Opens a small sheet: Lock, Sleep, Restart, Shut down. Restart and Shut down ask for a second tap, and close your applications properly first. |
 | Settings | Opens the settings panel: look, edge shape, screen rotation, when the rails slide away, one rail or two, button sounds. |
 | Rotate | Tap to swap landscape and portrait; hold to turn the screen upside down. |
 | Stay awake | While lit: no screensaver, no auto-lock, no screen-off. Same state as the bar's mug indicator. |
@@ -129,6 +130,8 @@ Choose one in the settings panel (the cog at the top of the left rail), or with 
 **Edges.** With a controller look, the side of each rail that faces the screen need not be straight: `tablet-mode edge lightning`, `wave`, `scallop`, `flame` or `saw` (or the Edge row in the settings panel) gives it that outline, the bar and the bottom bezel take it too, so it runs all the way round the screen, and the recess, its lip and its shadow follow it. A shaped edge stands up to 15 px over the edge of your windows; it is only drawn there, and a touch on it still goes to the window underneath. `straight` is the default.
 
 **Slide away.** `tablet-mode hide 30` (or "Slide away when idle" in the settings panel) slides the rails and the bottom bezel off their edges after that many seconds without a touch, and gives the windows the space; the next touch anywhere brings them back. Not while you are dictating or in the settings. `tablet-mode hide 0`, the default, keeps them in place.
+
+**Load.** Two hairlines in the bottom bezel show how hard the machine is working: processor on the left half, memory on the right. They are faint on purpose, and turn the look's warning colour above 85%.
 
 **Button sounds.** `tablet-mode sounds on` (or the settings panel) plays a soft tap as a button goes down. Off by default. The mic never makes one: it would be the first thing your dictation hears.
 
