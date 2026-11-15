@@ -236,7 +236,7 @@ Item {
   readonly property bool barSkinned: noKeyboard && skin !== null && barPosition === "top"
   // The closed frame (corner pieces, bottom bezel) is for the two-rail,
   // landscape layout; upright, the single bar of buttons is the bottom edge.
-  readonly property bool framed: barSkinned && !upright
+  readonly property bool framed: barSkinned && !upright && slide === 1
   // What the bar's text sits on: the top of the shell. No scrim over it: the
   // strip has to be exactly as bright as the rails it runs into.
   readonly property color barBase: !skin ? "black"
@@ -401,7 +401,36 @@ Item {
   readonly property int hideAfterMs: 30000
   property bool awake: true
 
-  function touched() { awake = true; hideTimer.restart() }
+  function touched() { awake = true; hideTimer.restart(); railsShown = true; railHideTimer.restart() }
+
+  // SLIDE AWAY. `tablet-mode hide <seconds>` (0: never, the default): after
+  // that long without a touch anywhere on the screen, the rails and the
+  // bottom bezel slide off their edges and the windows take the space; the
+  // next touch brings them back. Never while dictating or in the settings.
+  // The space is handed over in one step (when the slide out ends, and before
+  // the slide in starts), not a pixel at a time: every step would make every
+  // window lay itself out again.
+  property string hidePref: "0"
+  readonly property int railHideMs: Math.max(0, Number(hidePref.trim()) || 0) * 1000
+  property bool railsShown: true
+  property real slide: railsShown ? 1 : 0          // 1: in place, 0: off the edge
+  Behavior on slide { NumberAnimation { duration: 260; easing.type: Easing.OutCubic } }
+  onRailHideMsChanged: { railsShown = true; railHideTimer.restart() }
+  Timer {
+    id: railHideTimer
+    interval: Math.max(1000, root.railHideMs)
+    running: root.noKeyboard && root.railHideMs > 0 && !root.listening && !root.busy && !root.settingsOpen
+    onTriggered: root.railsShown = false
+  }
+  function setHide(v) { hidePref = v; run([home + "/.local/bin/tablet-mode", "hide", v]) }
+  FileView {
+    path: root.stateDir + "/hide"
+    watchChanges: true
+    printErrors: false
+    onFileChanged: reload()
+    onLoaded: root.hidePref = text()
+    onLoadFailed: root.hidePref = "0"
+  }
 
   Timer {
     id: hideTimer
@@ -1713,8 +1742,13 @@ Item {
 
   PanelWindow {
     id: rail
-    visible: root.noKeyboard
+    visible: root.noKeyboard && root.slide > 0
     screen: Quickshell.screens.length > 0 ? Quickshell.screens[0] : null
+    // Sliding away: off its own edge (the bottom, when upright).
+    margins {
+      right: rail.upright ? 0 : -(1 - root.slide) * rail.width
+      bottom: rail.upright ? -(1 - root.slide) * rail.height : 0
+    }
     // Along the right edge; along the bottom when the screen is upright.
     readonly property bool upright: screen !== null && screen.height > screen.width
     color: "transparent"
@@ -1723,7 +1757,7 @@ Item {
     WlrLayershell.namespace: "omarchy-tablet-rail"
     WlrLayershell.layer: WlrLayer.Top
     WlrLayershell.keyboardFocus: WlrKeyboardFocus.None
-    exclusiveZone: root.railSize + root.edgeGap
+    exclusiveZone: root.slide > 0 ? root.railSize + root.edgeGap : 0
     anchors { right: true; bottom: true; top: !rail.upright; left: rail.upright }
     // Shaped: the window is wider than the space it reserves, by the overhang,
     // which lies over the windows and passes touches through (the mask).
@@ -1991,13 +2025,14 @@ Item {
   // awake out of the way at the top.
   PanelWindow {
     id: railLeft
-    visible: root.noKeyboard && root.dual
+    visible: root.noKeyboard && root.dual && root.slide > 0
     screen: Quickshell.screens.length > 0 ? Quickshell.screens[0] : null
+    margins { left: -(1 - root.slide) * railLeft.width }
     color: "transparent"
     WlrLayershell.namespace: "omarchy-tablet-rail"
     WlrLayershell.layer: WlrLayer.Top
     WlrLayershell.keyboardFocus: WlrKeyboardFocus.None
-    exclusiveZone: root.railSize + root.edgeGap
+    exclusiveZone: root.slide > 0 ? root.railSize + root.edgeGap : 0
     anchors { left: true; top: true; bottom: true }
     readonly property int over: root.shaped ? root.overhang : 0
     implicitWidth: root.railSize + root.edgeGap + over
@@ -2302,14 +2337,15 @@ Item {
 
   PanelWindow {
     id: bezelStrip
-    visible: root.framed
+    visible: root.barSkinned && !root.upright && root.slide > 0
+    margins { bottom: -(1 - root.slide) * bezelStrip.height }
     screen: Quickshell.screens.length > 0 ? Quickshell.screens[0] : null
     color: "transparent"
     WlrLayershell.namespace: "omarchy-tablet-bar"
     WlrLayershell.layer: WlrLayer.Bottom
     WlrLayershell.keyboardFocus: WlrKeyboardFocus.None
     // Reserves only the bezel; its corner pieces rise into the windows' corners.
-    exclusiveZone: root.bezel
+    exclusiveZone: root.slide > 0 ? root.bezel : 0
     anchors { bottom: true; left: true; right: true }
     implicitHeight: root.bezel + root.frameRadius
     mask: Region {}
@@ -2552,13 +2588,16 @@ Item {
             { key: "edge", title: "Edge", narrow: true, options: [
                 { v: "straight", l: "Straight" }, { v: "lightning", l: "Lightning" }, { v: "wave", l: "Wave" },
                 { v: "scallop", l: "Scallop" }, { v: "flame", l: "Flame" }, { v: "saw", l: "Saw" }] },
+            { key: "hide", title: "Slide away when idle", narrow: true, options: [
+                { v: "0", l: "Never" }, { v: "10", l: "10 s" }, { v: "30", l: "30 s" }, { v: "60", l: "1 min" }, { v: "300", l: "5 min" }] },
             { key: "rails", title: "Rails", options: [{ v: "both", l: "Both sides" }, { v: "right", l: "Right only" }] },
             { key: "sounds", title: "Button sounds", options: [{ v: "on", l: "On" }, { v: "off", l: "Off" }] }
           ]
           RowLayout {
             id: sw2
             required property var modelData
-            readonly property string current: modelData.key === "edge"
+            readonly property string current: modelData.key === "hide" ? String(Math.round(root.railHideMs / 1000))
+              : modelData.key === "edge"
               ? (root.edgeNames.indexOf(root.edgePref.trim()) >= 0 ? root.edgePref.trim() : "straight")
               : modelData.key === "rotation" ? root.rotationPref.trim()
               : (modelData.key === "rails" ? (root.railsPref.trim() === "right" ? "right" : "both")
@@ -2583,7 +2622,8 @@ Item {
                   anchors.fill: parent
                   enabled: !parent.off
                   onClicked: {
-                    if (sw2.modelData.key === "edge") root.setEdge(parent.modelData.v)
+                    if (sw2.modelData.key === "hide") root.setHide(parent.modelData.v)
+                    else if (sw2.modelData.key === "edge") root.setEdge(parent.modelData.v)
                     else if (sw2.modelData.key === "rotation") root.setRotation(parent.modelData.v)
                     else if (sw2.modelData.key === "rails") root.setRails(parent.modelData.v)
                     else root.setSounds(parent.modelData.v)

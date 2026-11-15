@@ -30,6 +30,8 @@ Reactions:
     tablet-mode edge <shape>         the shape of the rails' inside edges, with a
                                      controller look: straight, lightning, wave,
                                      scallop, flame, saw
+    tablet-mode hide <seconds>       slide the rails away after this long without a
+                                     touch (0: never); the next touch brings them back
     tablet-mode sounds on|off        a soft tap as a rail button goes down
     tablet-mode dictation on|off     show the mic button at all (needs a dictation
                                      backend: see `tablet-touch` DICTATION)
@@ -321,6 +323,8 @@ def main():
         write(os.path.join(STATE_DIR, "look"), cmd[1])
     elif cmd[0] == "edge" and len(cmd) == 2 and cmd[1] in ("straight", "lightning", "wave", "scallop", "flame", "saw"):
         write(os.path.join(STATE_DIR, "edge"), cmd[1])
+    elif cmd[0] == "hide" and len(cmd) == 2 and cmd[1].isdigit():
+        write(os.path.join(STATE_DIR, "hide"), cmd[1])
     elif cmd[0] == "sounds" and len(cmd) == 2 and cmd[1] in ("on", "off"):
         write(os.path.join(STATE_DIR, "sounds"), cmd[1])
     elif cmd[0] == "bar-colors" and len(cmd) == 2:
