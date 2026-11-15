@@ -18,6 +18,7 @@ A rail on each edge of the screen, shown while the machine is in tablet mode. Wi
 | Maximise | Fills the screen with the focused window, or restores it. The bar and rails stay. |
 | Scroll strip | Drag along it to scroll the focused window. Let go while moving and it keeps going. |
 | Switch | Focuses the next window on the workspace. If the current one fills the screen, the next takes its place. |
+| ‹ n › | Previous / next workspace, with the current number. Hold an arrow to take the focused window along. |
 | Keyboard | Shows or hides the on-screen keyboard. |
 | Enter | Sends Enter to the focused app. |
 | Mic | Push-to-talk for a dictation tool. Only shown if you have one set up (see [Dictation](#dictation)). |
@@ -30,7 +31,6 @@ A rail on each edge of the screen, shown while the machine is in tablet mode. Wi
 | Volume up / down | Hold to keep going. Omarchy's own volume command, so its on-screen display shows. |
 | Play / pause | Hold for the next track. |
 | Launcher | Opens the app menu. |
-| ‹ n › | Previous / next workspace, with the current number. Hold an arrow to take the focused window along. |
 
 `tablet-mode rails right` puts everything except the media and volume buttons on a single right-hand rail; `tablet-mode rails both` brings the second one back. An upright screen always gets the single rail, along the bottom edge.
 

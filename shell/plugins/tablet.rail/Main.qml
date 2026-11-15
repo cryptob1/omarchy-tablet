@@ -4,11 +4,11 @@
 // TWO RAILS (the default, `tablet-mode rails both`): held in both hands, a big
 // tablet has a thumb on each edge, and the lower a button is the easier it is
 // to reach. So the buttons are split by hand and ordered bottom-up by use:
-//   right, bottom up   mic, enter, keyboard, switch window, the scroll strip,
-//                      maximise, and close at the top
-//   left, bottom up    next / previous workspace, launcher, play-pause (hold:
-//                      next track), volume down / up (hold: repeat), and stay
-//                      awake at the top
+//   right, bottom up   mic, enter, keyboard, next / previous workspace,
+//                      switch window, the scroll strip, maximise, and close
+//                      at the top
+//   left, bottom up    launcher, play-pause (hold: next track), volume down /
+//                      up (hold: repeat), and stay awake at the top
 // `tablet-mode rails right`, or an upright screen, gives the single rail
 // described below, which has no media or volume buttons.
 //
@@ -615,7 +615,6 @@ Item {
 
         TouchButton {
           Layout.alignment: Qt.AlignCenter
-          visible: !root.dual
           glyph: "󰁍"
           heldGlyph: "󰖯"
           holdMs: root.carryMs
@@ -624,7 +623,6 @@ Item {
         }
         Text {
           Layout.alignment: Qt.AlignCenter
-          visible: !root.dual
           text: Hyprland.focusedWorkspace !== null ? Hyprland.focusedWorkspace.id : ""
           color: Color.popups.text
           opacity: 0.75
@@ -633,7 +631,6 @@ Item {
         }
         TouchButton {
           Layout.alignment: Qt.AlignCenter
-          visible: !root.dual
           glyph: "󰁔"
           heldGlyph: "󰖯"
           holdMs: root.carryMs
@@ -666,8 +663,8 @@ Item {
   }
 
   // The left rail (two-rail layout): where the other thumb rests. Bottom up,
-  // most used first: workspaces, launcher, then media and volume, with stay
-  // awake out of the way at the top.
+  // most used first: launcher, then media and volume, with stay awake out of
+  // the way at the top.
   PanelWindow {
     id: railLeft
     visible: root.noKeyboard && root.dual
@@ -734,30 +731,6 @@ Item {
           Layout.alignment: Qt.AlignCenter
           glyph: "󰀻"
           onTapped: root.run(["omarchy-menu", "toggle", "apps"])
-        }
-        TouchButton {
-          Layout.alignment: Qt.AlignCenter
-          glyph: "󰁍"
-          heldGlyph: "󰖯"
-          holdMs: root.carryMs
-          onTapped: root.wsTapped("r-1")
-          onHeld: root.wsHeld("r-1")
-        }
-        Text {
-          Layout.alignment: Qt.AlignCenter
-          text: Hyprland.focusedWorkspace !== null ? Hyprland.focusedWorkspace.id : ""
-          color: Color.popups.text
-          opacity: 0.75
-          font.pixelSize: 17
-          font.bold: true
-        }
-        TouchButton {
-          Layout.alignment: Qt.AlignCenter
-          glyph: "󰁔"
-          heldGlyph: "󰖯"
-          holdMs: root.carryMs
-          onTapped: root.wsTapped("r+1")
-          onHeld: root.wsHeld("r+1")
         }
       }
     }
