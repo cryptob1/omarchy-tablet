@@ -7,8 +7,10 @@
 //   right, bottom up   mic, enter, keyboard, next / previous workspace,
 //                      switch window, the scroll strip, maximise, and close
 //                      at the top
-//   left, bottom up    launcher, play-pause (hold: next track), volume down /
-//                      up (hold: repeat), and stay awake at the top
+//   left, bottom up    launcher, play-pause (hold: next track), a volume
+//                      rocker and a brightness rocker (plus / minus, hold to
+//                      repeat, filled to show the level; tap the speaker to
+//                      mute), and stay awake at the top
 // `tablet-mode rails right`, or an upright screen, gives the single rail
 // described below, which has no media or volume buttons.
 //
@@ -65,6 +67,7 @@ import QtQuick.Layouts
 import Quickshell
 import Quickshell.Hyprland
 import Quickshell.Io
+import Quickshell.Services.Pipewire
 import Quickshell.Wayland
 import qs.Commons
 
@@ -131,6 +134,34 @@ Item {
   function toggleMaximise() { run(["hyprctl", "dispatch", 'hl.dsp.window.fullscreen({ mode = "maximized" })']) }
   function micPress() { Quickshell.execDetached([home + "/.local/bin/tablet-touch", "mic-press"]) }
   function micRelease() { Quickshell.execDetached([home + "/.local/bin/tablet-touch", "mic-release"]) }
+
+  // Levels shown in the rockers. Volume straight from PipeWire; brightness by
+  // asking brightnessctl (after each press, and now and then: other things
+  // change it too). -1: not known, and the rocker then shows no fill.
+  readonly property var sink: Pipewire.defaultAudioSink
+  PwObjectTracker { objects: root.sink ? [root.sink] : [] }
+  readonly property real volume: sink && sink.audio ? Math.min(1, sink.audio.volume) : -1
+  readonly property bool muted: sink && sink.audio ? sink.audio.muted : false
+  property real brightness: -1
+  Process {
+    id: brightnessProbe
+    command: ["brightnessctl", "-m"]
+    stdout: SplitParser {
+      onRead: (line) => {
+        var m = String(line).match(/,(\d+)%,/)
+        if (m) root.brightness = Number(m[1]) / 100
+      }
+    }
+  }
+  Timer {
+    interval: 8000
+    repeat: true
+    triggeredOnStart: true
+    running: root.noKeyboard && root.dual
+    onTriggered: brightnessProbe.running = true
+  }
+  Timer { id: brightnessSoon; interval: 180; onTriggered: brightnessProbe.running = true }
+  function brightnessStep(step) { run(["omarchy-brightness-display", step]); brightnessSoon.restart() }
 
   // Omarchy's stay-awake state is a file that exists while it is on. Read it
   // from there: a service plugin is not handed the idle service
@@ -516,6 +547,102 @@ Item {
     }
   }
 
+  // A rocker: one capsule for a level that goes up and down. Plus at the top,
+  // minus at the bottom, both repeating while held; what it controls in the
+  // middle (tap: `middle()`, e.g. mute). The capsule fills from the bottom to
+  // show the level, so a glance says how loud or how bright.
+  component Rocker: Rectangle {
+    id: rk
+    property string glyph: ""
+    property real level: -1            // 0-1, or -1 when unknown
+    property bool off: false           // muted: the fill goes grey
+    property int repeatMs: 110
+    signal up()
+    signal down()
+    signal middle()
+
+    readonly property real shown: level < 0 ? 0 : Math.max(0, Math.min(1, level))
+    readonly property color fillColor: Qt.tint(Color.popups.background,
+      Qt.alpha(off ? Color.popups.text : Color.accent, off ? 0.16 : 0.34))
+    // Which third is under the finger: 0 top, 1 middle, 2 bottom, -1 none.
+    readonly property int pressedThird: upArea.pressed ? 0 : (midArea.pressed ? 1 : (downArea.pressed ? 2 : -1))
+    implicitWidth: 50; implicitHeight: 150
+    radius: width / 2
+    border.color: Color.popups.border
+    border.width: 2
+    // The fill is the capsule itself, painted with a hard-edged gradient, so
+    // it follows the rounded ends instead of poking out of them.
+    gradient: Gradient {
+      GradientStop { position: 0.0; color: Color.popups.background }
+      GradientStop { position: Math.max(0.0, 1 - rk.shown - 0.002); color: Color.popups.background }
+      GradientStop { position: Math.max(0.002, 1 - rk.shown); color: rk.fillColor }
+      GradientStop { position: 1.0; color: rk.fillColor }
+    }
+
+    // Press feedback, the same way, for the third under the finger.
+    Rectangle {
+      anchors.fill: parent
+      radius: parent.radius
+      visible: rk.pressedThird >= 0
+      readonly property real from: Math.max(0, rk.pressedThird) / 3
+      gradient: Gradient {
+        GradientStop { position: 0.0; color: "transparent" }
+        GradientStop { position: Math.max(0.0, parent.from - 0.002); color: "transparent" }
+        GradientStop { position: Math.max(0.001, parent.from); color: Qt.alpha(Color.accent, 0.5) }
+        GradientStop { position: Math.min(0.999, parent.from + 1 / 3); color: Qt.alpha(Color.accent, 0.5) }
+        GradientStop { position: Math.min(1.0, parent.from + 1 / 3 + 0.002); color: "transparent" }
+        GradientStop { position: 1.0; color: "transparent" }
+      }
+    }
+
+    Column {
+      anchors.fill: parent
+      Repeater {
+        model: ["󰐕", rk.glyph, "󰍴"]
+        Item {
+          required property string modelData
+          required property int index
+          width: rk.width; height: rk.height / 3
+          Text {
+            anchors.centerIn: parent
+            text: parent.modelData
+            color: Color.popups.text
+            opacity: parent.index === 1 ? 1.0 : 0.8
+            font.pixelSize: parent.index === 1 ? 22 : 20
+          }
+        }
+      }
+    }
+
+    MouseArea {
+      id: upArea
+      width: parent.width; height: parent.height / 3
+      onPressed: { rk.up(); again.dir = 1; again.interval = 380; again.start() }
+      onReleased: again.stop()
+      onCanceled: again.stop()
+    }
+    MouseArea {
+      id: midArea
+      y: parent.height / 3
+      width: parent.width; height: parent.height / 3
+      onClicked: rk.middle()
+    }
+    MouseArea {
+      id: downArea
+      y: parent.height * 2 / 3
+      width: parent.width; height: parent.height / 3
+      onPressed: { rk.down(); again.dir = -1; again.interval = 380; again.start() }
+      onReleased: again.stop()
+      onCanceled: again.stop()
+    }
+    Timer {
+      id: again
+      property int dir: 1
+      repeat: true
+      onTriggered: { interval = rk.repeatMs; if (dir > 0) rk.up(); else rk.down() }
+    }
+  }
+
   // ---------------------------------------------------------------- the rail
   readonly property int railSize: 64
   // Two rails when asked for and the screen is wide; upright, one bar.
@@ -663,8 +790,8 @@ Item {
   }
 
   // The left rail (two-rail layout): where the other thumb rests. Bottom up,
-  // most used first: launcher, then media and volume, with stay awake out of
-  // the way at the top.
+  // most used first: launcher, then media, volume and brightness, with stay
+  // awake out of the way at the top.
   PanelWindow {
     id: railLeft
     visible: root.noKeyboard && root.dual
@@ -702,18 +829,22 @@ Item {
 
         Item { Layout.fillHeight: true }
 
-        // Volume: hold to keep going. Omarchy's own command, so its OSD shows.
-        TouchButton {
+        // Brightness and volume, each a rocker that shows its level.
+        Rocker {
           Layout.alignment: Qt.AlignCenter
-          glyph: "󰝝"
-          repeatMs: 120
-          onTapped: root.run(["omarchy-audio-output-volume", "raise"])
+          glyph: "󰃟"
+          level: root.brightness
+          onUp: root.brightnessStep("+5%")
+          onDown: root.brightnessStep("5%-")
         }
-        TouchButton {
+        Rocker {
           Layout.alignment: Qt.AlignCenter
-          glyph: "󰝞"
-          repeatMs: 120
-          onTapped: root.run(["omarchy-audio-output-volume", "lower"])
+          glyph: root.muted ? "󰖁" : "󰕾"
+          level: root.volume
+          off: root.muted
+          onUp: root.run(["omarchy-audio-output-volume", "raise"])
+          onDown: root.run(["omarchy-audio-output-volume", "lower"])
+          onMiddle: root.run(["omarchy-audio-output-volume", "mute-toggle"])
         }
         // Play / pause; hold for the next track.
         TouchButton {

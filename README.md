@@ -28,7 +28,8 @@ A rail on each edge of the screen, shown while the machine is in tablet mode. Wi
 | Button | Does |
 |---|---|
 | Stay awake | While lit: no screensaver, no auto-lock, no screen-off. Same state as the bar's mug indicator. |
-| Volume up / down | Hold to keep going. Omarchy's own volume command, so its on-screen display shows. |
+| Brightness | A rocker: plus at the top, minus at the bottom, hold to keep going. It fills from the bottom to show the current level. |
+| Volume | The same rocker for volume; tap the speaker in the middle to mute. Uses Omarchy's own commands, so its on-screen display shows too. |
 | Play / pause | Hold for the next track. |
 | Launcher | Opens the app menu. |
 
