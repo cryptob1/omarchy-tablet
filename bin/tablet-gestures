@@ -244,6 +244,10 @@ def focus_step(history, address, now):
     return {"current": [address, now], "previous": current}
 
 
+COVER_EVENTS = (b"workspace", b"workspacev2", b"focusedmon", b"openwindow", b"closewindow", b"movewindow",
+                b"movewindowv2", b"fullscreen", b"changefloatingmode", b"activespecial", b"moveworkspace")
+
+
 def follow_focus():
     sig = os.environ.get("HYPRLAND_INSTANCE_SIGNATURE", "")
     path = os.path.join(os.environ.get("XDG_RUNTIME_DIR", "/tmp"), "hypr", sig, ".socket2.sock")
@@ -262,6 +266,11 @@ def follow_focus():
                         break
                     buf += data
                     *lines, buf = buf.split(b"\n")
+                    # The terminal cover follows the windows: at once, on anything
+                    # that can move one (a cover left over a workspace it does not
+                    # belong to swallows every touch there until the next look).
+                    if any(l.split(b">>", 1)[0] in COVER_EVENTS for l in lines):
+                        threading.Thread(target=COVER.refresh, daemon=True).start()
                     for line in lines:
                         if line.startswith(b"activewindowv2>>"):
                             addr = line[16:].decode("ascii", "ignore").strip()
