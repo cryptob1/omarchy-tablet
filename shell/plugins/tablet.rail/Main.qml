@@ -2390,6 +2390,10 @@ Item {
           // ...and its shadow towards the screen turns the corner with it:
           // darkest at the inside corner, gone by the same distance the
           // rail's own shadow takes to fade.
+          // And the rails' chamfer down the screen's edge (a bright line, a
+          // dark one inside it) does not stop where the band begins.
+          c.fillStyle = "rgba(255,255,255,0.42)"; c.fillRect(0, by, 1, band); c.fillRect(w - 1, by, 1, band)
+          c.fillStyle = "rgba(0,0,0,0.22)"; c.fillRect(1, by, 1.5, band); c.fillRect(w - 2.5, by, 1.5, band)
           var dr = frameRail * 0.55
           for (var side = 0; side < 2; side++) {
             var cx = side ? w - frameRail : frameRail
