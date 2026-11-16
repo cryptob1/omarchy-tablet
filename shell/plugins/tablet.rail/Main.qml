@@ -367,6 +367,44 @@ Item {
     MouseArea { anchors.fill: parent }             // takes the touch; does nothing with it
   }
 
+  // THE RAILS RESERVE NOTHING THEMSELVES. A surface that reserves space is
+  // also moved by the space others reserve, in an order nobody controls: with
+  // the rails on the Overlay layer beside the keyboard, opening the keyboard
+  // squeezed the right rail to the height above it and left the left one
+  // alone (2026-11-16), a blank block where the rail's lower half had been.
+  // So the rails ignore reservations altogether and are placed by margins
+  // (below the bar or the top bezel, above the bottom band), and the room
+  // they need beside the windows is reserved by two empty surfaces a layer
+  // down, which the keyboard and the windows do respect.
+  readonly property int railHead: barSkinned ? topSize : (barPosition === "top" ? Style.bar.sizeHorizontal : 0)
+  readonly property int railFoot: barSkinned && !upright && slide > 0 ? bezel : 0
+  PanelWindow {
+    visible: rail.visible
+    screen: rail.screen
+    color: "transparent"
+    WlrLayershell.namespace: "omarchy-tablet-bar"
+    WlrLayershell.layer: WlrLayer.Top
+    WlrLayershell.keyboardFocus: WlrKeyboardFocus.None
+    exclusiveZone: root.slide > 0 ? root.railSize + root.edgeGap : 0
+    anchors { right: true; bottom: true; top: !rail.upright; left: rail.upright }
+    implicitWidth: root.railSize + root.edgeGap
+    implicitHeight: root.railSize + root.edgeGap
+    mask: Region {}
+  }
+  PanelWindow {
+    visible: railLeft.visible
+    screen: railLeft.screen
+    color: "transparent"
+    WlrLayershell.namespace: "omarchy-tablet-bar"
+    WlrLayershell.layer: WlrLayer.Top
+    WlrLayershell.keyboardFocus: WlrKeyboardFocus.None
+    exclusiveZone: root.slide > 0 ? root.railSize + root.edgeGap : 0
+    anchors { left: true; top: true; bottom: true }
+    implicitWidth: root.railSize + root.edgeGap
+    implicitHeight: root.railSize + root.edgeGap
+    mask: Region {}
+  }
+
   // THE RAILS ARE ON TOP. Omarchy's panels (Wi-Fi, Bluetooth, power, the
   // menus) are full-screen Overlay surfaces that close on a touch outside
   // their card. On the Top layer the rails were under them, so reaching for
@@ -2348,7 +2386,8 @@ Item {
     // Sliding away: off its own edge (the bottom, when upright).
     margins {
       right: rail.upright ? 0 : -(1 - root.slide) * rail.width
-      bottom: rail.upright ? -(1 - root.slide) * rail.height : 0
+      bottom: rail.upright ? -(1 - root.slide) * rail.height : root.railFoot
+      top: rail.upright ? 0 : root.railHead
     }
     // Along the right edge; along the bottom when the screen is upright.
     readonly property bool upright: screen !== null && screen.height > screen.width
@@ -2358,7 +2397,7 @@ Item {
     WlrLayershell.namespace: "omarchy-tablet-rail"
     WlrLayershell.layer: WlrLayer.Overlay   // see THE RAILS ARE ON TOP
     WlrLayershell.keyboardFocus: WlrKeyboardFocus.None
-    exclusiveZone: root.slide > 0 ? root.railSize + root.edgeGap : 0
+    exclusionMode: ExclusionMode.Ignore    // see THE RAILS RESERVE NOTHING THEMSELVES
     anchors { right: true; bottom: true; top: !rail.upright; left: rail.upright }
     // Shaped: the window is wider than the space it reserves, by the overhang,
     // which lies over the windows and passes touches through (the mask).
@@ -2714,12 +2753,12 @@ Item {
     id: railLeft
     visible: root.noKeyboard && root.dual && root.slide > 0 && !root.fullNow
     screen: Quickshell.screens.length > 0 ? Quickshell.screens[0] : null
-    margins { left: -(1 - root.slide) * railLeft.width }
+    margins { left: -(1 - root.slide) * railLeft.width; top: root.railHead; bottom: root.railFoot }
     color: "transparent"
     WlrLayershell.namespace: "omarchy-tablet-rail"
     WlrLayershell.layer: WlrLayer.Overlay   // see THE RAILS ARE ON TOP
     WlrLayershell.keyboardFocus: WlrKeyboardFocus.None
-    exclusiveZone: root.slide > 0 ? root.railSize + root.edgeGap : 0
+    exclusionMode: ExclusionMode.Ignore
     anchors { left: true; top: true; bottom: true }
     readonly property int over: root.shaped ? root.overhang : 0
     implicitWidth: root.railSize + root.edgeGap + over
