@@ -137,8 +137,8 @@ Choose one in the settings panel (the cog at the top of the left rail), or with 
 
 | Focused | Keys |
 |---|---|
-| A terminal | Esc, Tab, Shift+Tab, Ctrl+C, the four arrows, 1 2 3, / |
-| A browser | Previous tab, next tab, new tab, close tab, reopen closed tab, reload, address bar, find, smaller text, larger text |
+| A terminal | Esc, Tab, Shift+Tab, Ctrl+C, the four arrows, 1 2 3, /, Backspace, and **sudo**, which types `! sudo -v` and Enter: it refreshes sudo's password timer, from a shell prompt or from Claude Code's (where the `!` runs it as a shell command) |
+| A browser | Forward, reload, previous tab, next tab, new tab, close tab, reopen closed tab, address bar, find |
 
 It appears with those apps and goes away with others (`tablet-mode keys auto`, the default); `always` keeps it up everywhere, `off` never shows it. It takes 36 px of height while it is up.
 
