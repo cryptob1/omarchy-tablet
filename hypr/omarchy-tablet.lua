@@ -29,6 +29,9 @@ hl.layer_rule({ name = "tablet-keys-on-top", match = { namespace = "^omarchy-tab
 -- And for the rails: a touch on the scroll strip must reach it, not close the
 -- panel it is about to scroll.
 hl.layer_rule({ name = "tablet-rail-on-top", match = { namespace = "^omarchy-tablet-rail$" }, order = -90 })
+-- Notifications come up in the corner the right rail stands in. Above it:
+-- a notice half hidden behind a rail is no notice.
+hl.layer_rule({ name = "tablet-notices-over-rail", match = { namespace = "^omarchy-notifications$" }, order = -95 })
 
 -- The button rail (shell plugin tablet.rail) is a see-through card like
 -- Omarchy's own surfaces. Blur what is behind it whenever blur is on at all
