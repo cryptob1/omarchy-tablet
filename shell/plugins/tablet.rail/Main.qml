@@ -238,6 +238,8 @@ Item {
   readonly property bool framed: barSkinned && !upright && slide === 1
   // What the bar's text sits on: the top of the shell. No scrim over it: the
   // strip has to be exactly as bright as the rails it runs into.
+  readonly property real screenW: Quickshell.screens.length > 0 ? Quickshell.screens[0].width : 0
+  readonly property real screenH: Quickshell.screens.length > 0 ? Quickshell.screens[0].height : 0
   readonly property color barBase: !skin ? "black"
     : (skin.palette && skin.pattern.indexOf("wash") >= 0 ? skin.palette[0] : skin.shellTop)
   readonly property string barText: skin && skin.barText ? skin.barText
@@ -1870,6 +1872,20 @@ Item {
     // `frameBar` down: the bar and the rails then read as one moulding.
     property color base: "transparent"
     property bool flatWash: false
+    // ONE PAINTING. The frame is several surfaces (two rails, the bands, the
+    // shaped edges), and each used to paint its own stretch of pattern from
+    // its own seed, over its own extent: spots, stripes and pixels stopped
+    // dead at every join, and a wash restarted. With `whole` every piece runs
+    // the same pattern over the whole screen from the same seed and keeps the
+    // part that falls on it, so the picture carries across the joins.
+    property bool whole: false
+    // Not every pattern can be shared. Some are built to the piece they are
+    // on: hull plates with a vent sized to the rail, brushing that runs the
+    // piece's length, rivets near its ends, a crack or two per piece. Painted
+    // across the whole screen those come out as nonsense (a vent a metre
+    // wide), so they stay per piece, from the piece's own seed.
+    property int pieceSeed: 0
+    readonly property var perPiece: ["stripes", "traces", "brushed", "sheen", "scratches", "rivets", "grain", "cracks", "panels"]
     property real frameRail: 0
     property real frameBar: 0
     property bool frameFlip: false         // the bottom strip: the same outline, upside down
@@ -1964,10 +1980,24 @@ Item {
       // From here on, screen coordinates.
       c.translate(-ox, -oy)
       var X0 = ox, Y0 = oy, X1 = ox + w, Y1 = oy + h
+      var everywhere = whole && root.screenW > 0
+      if (everywhere) { X0 = 0; Y0 = 0; X1 = root.screenW; Y1 = root.screenH }
+      var PW = X1 - X0, PH = Y1 - Y0        // the painting's extent: the piece's own, or the screen's
       var x, y, i, k, r0, pal = palette && palette.length ? palette : [ink]
       var parts = pattern === "none" ? [] : pattern.split("+")
+      // A pattern that throws must not take the shading below with it (one
+      // did, silently: the bands of that look were never shaded at all).
+      c.save()
+      try {
       for (var pi = 0; pi < parts.length; pi++) {
         var pat = parts[pi]
+        var wide = everywhere && perPiece.indexOf(pat) < 0
+        X0 = wide ? 0 : ox; Y0 = wide ? 0 : oy
+        X1 = wide ? root.screenW : ox + w; Y1 = wide ? root.screenH : oy + h
+        PW = X1 - X0; PH = Y1 - Y0
+        // Each pattern from its own point in the sequence, so that what one
+        // draws does not depend on how much the one before it drew.
+        state = ((wide || !pieceSeed ? seed : pieceSeed) * 2654435761 + pi * 40503) % 4294967296
         // What IS the shell's colour is painted at full strength; what
         // decorates it sits back a little, so the buttons stay in front.
         var solid = pat === "wash" || pat === "bands" || pat === "pixels"
@@ -1975,8 +2005,8 @@ Item {
         if (pat === "wash") {
           var g = c.createLinearGradient(0, Y0, 0, Y1)
           for (k = 0; k < pal.length; k++) g.addColorStop(pal.length > 1 ? k / (pal.length - 1) : 0, pal[k])
-          c.fillStyle = flatWash ? pal[0] : g
-          c.fillRect(X0, Y0, w, h)
+          c.fillStyle = flatWash && !everywhere ? pal[0] : g
+          c.fillRect(ox, oy, w, h)
         } else if (pat === "bands") {
           var bh = 20, m = 0.7                       // lines  y + m*x = k*bh
           for (k = Math.floor((Y0 + m * X0) / bh) - 1; k * bh < Y1 + m * X1 + bh; k++) {
@@ -2006,8 +2036,8 @@ Item {
           }
         } else if (pat === "ridges") {
           for (y = Math.floor(Y0 / 6) * 6 + 3; y < Y1; y += 6) {
-            c.fillStyle = ink;  c.fillRect(X0, y, w, 1)
-            c.fillStyle = glow; c.fillRect(X0, y + 1, w, 1)
+            c.fillStyle = ink;  c.fillRect(X0, y, PW, 1)
+            c.fillStyle = glow; c.fillRect(X0, y + 1, PW, 1)
           }
         } else if (pat === "scales") {
           var sr2 = 9, sv = sr2 * 0.95
@@ -2035,8 +2065,8 @@ Item {
           }
         } else if (pat === "spots") {
           var cell = 17
-          for (var gy = -1; gy * cell < h + cell; gy++) {
-            for (var gx = -1; gx * cell < w + cell; gx++) {
+          for (var gy = -1; gy * cell < PH + cell; gy++) {
+            for (var gx = -1; gx * cell < PW + cell; gx++) {
               if (rnd() < 0.16) continue                     // a gap now and then
               var cx = X0 + (gx + 0.5 + (rnd() - 0.5) * 0.8) * cell + (gy % 2 ? cell / 2 : 0)
               var cy = Y0 + (gy + 0.5 + (rnd() - 0.5) * 0.8) * cell
@@ -2063,9 +2093,9 @@ Item {
           }
         } else if (pat === "stripes") {
           c.fillStyle = ink
-          var along = w > h * 3                              // the strip: stripes run across it
-          for (var t0 = -10; t0 < (along ? w : h) + 20; t0 += 15 + rnd() * 12) {
-            var span = along ? h : w
+          var along = PW > PH * 3                              // the strip: stripes run across it
+          for (var t0 = -10; t0 < (along ? PW : PH) + 20; t0 += 15 + rnd() * 12) {
+            var span = along ? PH : PW
             var fromA = rnd() < 0.5, len = span * (0.55 + rnd() * 0.5), thick = 3.5 + rnd() * 4.5
             var p0 = fromA ? -2 : span + 2, p1 = fromA ? len : span - len
             var bend = (rnd() - 0.5) * 16, drop = 6 + rnd() * 10
@@ -2084,9 +2114,9 @@ Item {
           }
         } else if (pat === "confetti") {
           var colours = [ink, glow, "#ffcc00", "#3ddc84"]
-          for (i = 0; i < w * h / 190; i++) {
+          for (i = 0; i < PW * PH / 190; i++) {
             c.save()
-            c.translate(X0 + rnd() * w, Y0 + rnd() * h); c.rotate(rnd() * 3.14)
+            c.translate(X0 + rnd() * PW, Y0 + rnd() * PH); c.rotate(rnd() * 3.14)
             c.globalAlpha = (0.55 + rnd() * 0.3) * soft
             c.fillStyle = colours[Math.floor(rnd() * colours.length)]
             if (rnd() < 0.5) c.fillRect(-2.2, -1, 4.4, 2)
@@ -2094,8 +2124,8 @@ Item {
             c.restore()
           }
         } else if (pat === "stars") {
-          for (i = 0; i < w * h / 210; i++) {
-            x = X0 + rnd() * w; y = Y0 + rnd() * h
+          for (i = 0; i < PW * PH / 210; i++) {
+            x = X0 + rnd() * PW; y = Y0 + rnd() * PH
             var big = rnd() < 0.09, sr = big ? 1.5 : 0.5 + rnd() * 0.9
             c.globalAlpha = (0.45 + rnd() * 0.55) * soft
             c.fillStyle = rnd() < 0.3 ? glow : ink
@@ -2108,8 +2138,8 @@ Item {
           }
         } else if (pat === "seeds") {
           var sc = 19
-          for (var sy = 0; sy * sc < h + sc; sy++) {
-            for (var sx = 0; sx * sc < w + sc; sx++) {
+          for (var sy = 0; sy * sc < PH + sc; sy++) {
+            for (var sx = 0; sx * sc < PW + sc; sx++) {
               if (rnd() < 0.2) continue
               c.save()
               c.translate(X0 + (sx + 0.5 + (rnd() - 0.5) * 0.7) * sc + (sy % 2 ? sc / 2 : 0), Y0 + (sy + 0.5 + (rnd() - 0.5) * 0.7) * sc)
@@ -2123,12 +2153,12 @@ Item {
           }
         } else if (pat === "traces") {
           c.lineWidth = 1.5; c.lineJoin = "round"
-          for (i = 0; i < Math.max(w, h) / 22; i++) {
-            x = X0 + Math.round(rnd() * w / 8) * 8; y = Y0 + Math.round(rnd() * h / 8) * 8
+          for (i = 0; i < Math.max(PW, PH) / 22; i++) {
+            x = X0 + Math.round(rnd() * PW / 8) * 8; y = Y0 + Math.round(rnd() * PH / 8) * 8
             c.beginPath(); c.moveTo(x, y)
             for (k = 0; k < 3 + Math.floor(rnd() * 3); k++) {
               var step2 = (2 + Math.floor(rnd() * 5)) * 8 * (rnd() < 0.5 ? -1 : 1)
-              if ((k % 2) === (w > h * 3 ? 0 : 1)) x += step2; else y += Math.abs(step2) * (w > h * 3 ? 0.25 : 1)
+              if ((k % 2) === (PW > PH * 3 ? 0 : 1)) x += step2; else y += Math.abs(step2) * (PW > PH * 3 ? 0.25 : 1)
               c.lineTo(x, y)
             }
             c.strokeStyle = ink; c.stroke()
@@ -2143,22 +2173,22 @@ Item {
             var gg = c.createLinearGradient(bx, 0, bx + 150, 150 * 0.55)
             gg.addColorStop(0, "rgba(255,255,255,0)"); gg.addColorStop(0.5, "rgba(255,255,255,0.20)"); gg.addColorStop(1, "rgba(255,255,255,0)")
             c.globalAlpha = 1; c.fillStyle = gg
-            c.fillRect(X0, Y0, w, h)
+            c.fillRect(X0, Y0, PW, PH)
           }
         } else if (pat === "brushed") {
           // Brushed metal: hundreds of faint hairlines along the piece's length.
-          var lengthwise = w > h * 3
-          for (i = 0; i < (lengthwise ? h : w) * 2.2; i++) {
+          var lengthwise = PW > PH * 3
+          for (i = 0; i < (lengthwise ? PH : PW) * 2.2; i++) {
             c.globalAlpha = 0.03 + rnd() * 0.09
             c.fillStyle = rnd() < 0.5 ? glow : ink
-            if (lengthwise) c.fillRect(X0, Y0 + rnd() * h, w, 0.6 + rnd() * 0.8)
-            else c.fillRect(X0 + rnd() * w, Y0, 0.6 + rnd() * 0.8, h)
+            if (lengthwise) c.fillRect(X0, Y0 + rnd() * PH, PW, 0.6 + rnd() * 0.8)
+            else c.fillRect(X0 + rnd() * PW, Y0, 0.6 + rnd() * 0.8, PH)
           }
         } else if (pat === "scratches") {
           // Wear: fine scratches, each a bright cut with a dark shoulder; and
           // a dent or two, a hollow that is dark on one side and lit on the other.
-          for (i = 0; i < w * h / 2100; i++) {
-            x = X0 + rnd() * w; y = Y0 + rnd() * h
+          for (i = 0; i < PW * PH / 2100; i++) {
+            x = X0 + rnd() * PW; y = Y0 + rnd() * PH
             var ang = rnd() * 6.283, len2 = 5 + rnd() * rnd() * 46, lw = 0.5 + rnd() * 0.7
             var dx = Math.cos(ang) * len2, dy = Math.sin(ang) * len2, bow = (rnd() - 0.5) * 6
             c.lineWidth = lw
@@ -2167,9 +2197,9 @@ Item {
             c.globalAlpha = 0.25 + rnd() * 0.35; c.strokeStyle = glow
             c.beginPath(); c.moveTo(x, y); c.quadraticCurveTo(x + dx / 2 + bow, y + dy / 2, x + dx, y + dy); c.stroke()
           }
-          for (i = 0; i < Math.max(1, w * h / 26000); i++) {
-            x = X0 + 10 + rnd() * (w - 20); y = Y0 + 10 + rnd() * (h - 20)
-            var dr = Math.min(6 + rnd() * 8, Math.min(w, h) * 0.42)
+          for (i = 0; i < Math.max(1, PW * PH / 26000); i++) {
+            x = X0 + 10 + rnd() * (PW - 20); y = Y0 + 10 + rnd() * (PH - 20)
+            var dr = Math.min(6 + rnd() * 8, Math.min(PW, PH) * 0.42)
             var dg = c.createRadialGradient(x - dr * 0.25, y - dr * 0.25, 0, x, y, dr)
             dg.addColorStop(0, "rgba(0,0,0,0.34)"); dg.addColorStop(0.7, "rgba(0,0,0,0.10)"); dg.addColorStop(1, "rgba(0,0,0,0)")
             c.globalAlpha = 1; c.fillStyle = dg
@@ -2179,7 +2209,7 @@ Item {
           }
         } else if (pat === "rivets") {
           // A row of rivets down each long edge (not on the thin strips).
-          if (!(w > h * 3)) {
+          if (!(PW > PH * 3)) {
             for (y = Y0 + 16; y < Y1 - 8; y += 58) {
               for (k = 0; k < 2; k++) {
                 x = k ? X1 - 6 : X0 + 6
@@ -2195,7 +2225,7 @@ Item {
         } else if (pat === "grain") {
           // Wood grain: long wandering lines down the length, and a few knots
           // the grain circles round.
-          var lw2 = w > h * 3, span2 = lw2 ? h : w, run = lw2 ? w : h
+          var lw2 = PW > PH * 3, span2 = lw2 ? PH : PW, run = lw2 ? PW : PH
           for (var gpos = -2; gpos < span2 + 2; gpos += 2.2 + rnd() * 3.4) {
             var ph = rnd() * 6.283, wav = 40 + rnd() * 90, amp = 0.8 + rnd() * 2.4
             c.globalAlpha = 0.10 + rnd() * 0.26
@@ -2210,9 +2240,9 @@ Item {
             c.stroke()
           }
           for (i = 0; i < Math.max(1, Math.round(run / 300)); i++) {
-            var kx2 = lw2 ? X0 + rnd() * w : X0 + 12 + rnd() * (w - 24)
-            var ky2 = lw2 ? Y0 + h / 2 : Y0 + 30 + rnd() * (h - 60)
-            var kr = lw2 ? h * 0.3 : 5 + rnd() * 5
+            var kx2 = lw2 ? X0 + rnd() * PW : X0 + 12 + rnd() * (PW - 24)
+            var ky2 = lw2 ? Y0 + PH / 2 : Y0 + 30 + rnd() * (PH - 60)
+            var kr = lw2 ? PH * 0.3 : 5 + rnd() * 5
             for (k = 5; k >= 1; k--) {
               c.globalAlpha = 0.16 + (6 - k) * 0.07
               c.strokeStyle = ink; c.lineWidth = 1
@@ -2226,10 +2256,10 @@ Item {
           }
         } else if (pat === "cracks") {
           // A split or two along the grain: a dark jagged line with a pale lip.
-          var lw3 = w > h * 3
-          for (i = 0; i < (lw3 ? 2 : Math.max(2, Math.round(h / 330))); i++) {
-            var cx3 = lw3 ? X0 + rnd() * w : X0 + 8 + rnd() * (w - 16)
-            var cy3 = lw3 ? Y0 + 4 + rnd() * (h - 8) : Y0 + rnd() * h
+          var lw3 = PW > PH * 3
+          for (i = 0; i < (lw3 ? 2 : Math.max(2, Math.round(PH / 330))); i++) {
+            var cx3 = lw3 ? X0 + rnd() * PW : X0 + 8 + rnd() * (PW - 16)
+            var cy3 = lw3 ? Y0 + 4 + rnd() * (PH - 8) : Y0 + rnd() * PH
             var seg = 6 + Math.floor(rnd() * 9), pts3 = [[cx3, cy3]]
             for (k = 0; k < seg; k++) {
               var adv = 6 + rnd() * 10, side = (rnd() - 0.5) * 5
@@ -2252,7 +2282,7 @@ Item {
           // A ship's hull: plates with seams between them, and on the plates
           // the odd vent, warning stripe, status light and bolt. A lit conduit
           // runs the length of the edge that faces the screen.
-          var lw4 = w > h * 3, run4 = lw4 ? w : h, span4 = lw4 ? h : w, at = 0
+          var lw4 = PW > PH * 3, run4 = lw4 ? PW : PH, span4 = lw4 ? PH : PW, at = 0
           function P(a, b2) { return lw4 ? [X0 + a, Y0 + b2] : [X0 + b2, Y0 + a] }   // (along, across)
           function box(a, b2, la, lb) { var q0 = P(a, b2); c.fillRect(q0[0], q0[1], lw4 ? la : lb, lw4 ? lb : la) }
           while (at < run4) {
@@ -2266,17 +2296,20 @@ Item {
                 c.globalAlpha = 0.12; c.fillStyle = "#ffffff"; box(mid + k * 5 + 2.2, span4 * 0.22, 0.8, span4 * 0.56)
               }
             } else if (what < 0.52 && span4 > 30) {                // a warning stripe
+              // Drawn bar by bar inside its own box. It used to clip to the box
+              // and draw long slanted bars, but a clip set inside this canvas's
+              // outline clip is not undone by restore(): from the first stripe
+              // on, everything painted afterwards, the band's shading included,
+              // was confined to that little box.
               var hx = P(mid, span4 * 0.2)
-              c.save(); c.beginPath()
-              c.rect(hx[0], hx[1], lw4 ? 26 : span4 * 0.6, lw4 ? span4 * 0.6 : 9); c.clip()
-              for (k = -4; k < 12; k++) {
+              var sw = lw4 ? 26 : span4 * 0.6, sh = lw4 ? span4 * 0.6 : 9, lean = Math.min(6, sh * 0.6)
+              for (k = 0; k * 7 + 7 + lean <= sw; k++) {
                 c.globalAlpha = 0.85; c.fillStyle = k % 2 ? "#f2c200" : "#16181c"
                 c.beginPath()
-                c.moveTo(hx[0] + k * 7, hx[1] - 2); c.lineTo(hx[0] + k * 7 + 7, hx[1] - 2)
-                c.lineTo(hx[0] + k * 7 - 5, hx[1] + 60); c.lineTo(hx[0] + k * 7 - 12, hx[1] + 60)
+                c.moveTo(hx[0] + k * 7 + lean, hx[1]); c.lineTo(hx[0] + k * 7 + 7 + lean, hx[1])
+                c.lineTo(hx[0] + k * 7 + 7, hx[1] + sh); c.lineTo(hx[0] + k * 7, hx[1] + sh)
                 c.closePath(); c.fill()
               }
-              c.restore()
             } else if (what < 0.8) {                               // a status light, with a halo
               var lp = P(mid, span4 * (0.2 + rnd() * 0.6)), lc = rnd() < 0.25 ? "#ff4d5e" : glow
               var hg = c.createRadialGradient(lp[0], lp[1], 0, lp[0], lp[1], 8)
@@ -2306,7 +2339,8 @@ Item {
           }
         }
       }
-      c.globalAlpha = 1
+      } catch (err) { console.warn("tablet.rail: pattern", pattern, "failed:", err) }
+      c.restore()                            // whatever the patterns left behind: alpha, clip
       c.translate(ox, oy)
       if (outline && across && shade) {
         // Hanging from the bar or rising from the bezel: all of it is on the
@@ -2448,7 +2482,7 @@ Item {
       base: root.skin ? root.skin.shellTop : "transparent"
       baseBottom: root.skin ? root.skin.shellBottom : "transparent"
       pattern: root.skin ? root.skin.pattern : "none"
-      seed: 11
+      seed: 1; whole: true; pieceSeed: 11   // one painting, shared by every piece of the frame
       ox: rail.screen ? rail.screen.width - width : 0
       oy: root.topSize
       ink: root.skin ? root.skin.ink : "transparent"
@@ -2483,7 +2517,7 @@ Item {
         anchors.margins: root.framed ? 0 : root.frameEdgeWidth
         visible: root.skin !== null && !root.shaped
         pattern: root.skin ? root.skin.pattern : "none"
-        seed: 11
+        seed: 1; whole: true; pieceSeed: 11   // one painting, shared by every piece of the frame
         ox: rail.screen ? rail.screen.width - root.railSize : 0
         oy: root.topSize
         rTL: parent.topLeftRadius; rTR: parent.topRightRadius
@@ -2807,7 +2841,7 @@ Item {
       base: root.skin ? root.skin.shellTop : "transparent"
       baseBottom: root.skin ? root.skin.shellBottom : "transparent"
       pattern: root.skin ? root.skin.pattern : "none"
-      seed: 29
+      seed: 1; whole: true; pieceSeed: 29   // one painting, shared by every piece of the frame
       ox: 0
       oy: root.topSize
       ink: root.skin ? root.skin.ink : "transparent"
@@ -2840,7 +2874,7 @@ Item {
         anchors.margins: root.framed ? 0 : root.frameEdgeWidth
         visible: root.skin !== null && !root.shaped
         pattern: root.skin ? root.skin.pattern : "none"
-        seed: 29
+        seed: 1; whole: true; pieceSeed: 29   // one painting, shared by every piece of the frame
         ox: 0
         oy: root.topSize
         rTL: parent.topLeftRadius; rTR: parent.topRightRadius
@@ -3138,7 +3172,7 @@ Item {
       edge: root.frameEdge
       edgeWidth: root.frameEdgeWidth
       pattern: root.skin ? root.skin.pattern : "none"
-      seed: 47
+      seed: 1; whole: true; pieceSeed: 47   // one painting, shared by every piece of the frame
       ink: root.skin ? root.skin.ink : "transparent"
       glow: root.skin ? root.skin.glow : "transparent"
       palette: root.skin && root.skin.palette ? root.skin.palette : []
@@ -3196,7 +3230,7 @@ Item {
                          ? root.skin.palette[root.skin.palette.length - 1] : root.skin.shellBottom) : "transparent"
       // "wash" here is the LAST colour: the one the rails end with.
       flatWash: true
-      palette: root.skin && root.skin.palette ? [root.skin.palette[root.skin.palette.length - 1]] : []
+      palette: root.skin && root.skin.palette ? root.skin.palette : []     // the whole palette: it is one painting now
       frameRail: root.dual ? root.railSize : 0.01
       frameBar: root.bezel
       frameFlip: true
@@ -3205,7 +3239,7 @@ Item {
       edge: root.frameEdge
       edgeWidth: root.frameEdgeWidth
       pattern: root.skin ? root.skin.pattern : "none"
-      seed: 61
+      seed: 1; whole: true; pieceSeed: 61   // one painting, shared by every piece of the frame
       ink: root.skin ? root.skin.ink : "transparent"
       glow: root.skin ? root.skin.glow : "transparent"
     }
@@ -3394,7 +3428,7 @@ Item {
       base: root.skin ? root.barBase : "transparent"
       flatWash: true
       pattern: root.skin ? root.skin.pattern : "none"
-      seed: 47
+      seed: 1; whole: true; pieceSeed: 47   // one painting, shared by every piece of the frame
       ox: recessCanvas.l; oy: recessCanvas.t
       ink: root.skin ? root.skin.ink : "transparent"
       glow: root.skin ? root.skin.glow : "transparent"
@@ -3409,9 +3443,9 @@ Item {
       base: root.skin ? (root.skin.palette && root.skin.pattern.indexOf("wash") >= 0
                          ? root.skin.palette[root.skin.palette.length - 1] : root.skin.shellBottom) : "transparent"
       flatWash: true
-      palette: root.skin && root.skin.palette ? [root.skin.palette[root.skin.palette.length - 1]] : []
+      palette: root.skin && root.skin.palette ? root.skin.palette : []     // the whole palette: it is one painting now
       pattern: root.skin ? root.skin.pattern : "none"
-      seed: 61
+      seed: 1; whole: true; pieceSeed: 61   // one painting, shared by every piece of the frame
       ox: recessCanvas.l; oy: y
       ink: root.skin ? root.skin.ink : "transparent"
       glow: root.skin ? root.skin.glow : "transparent"
