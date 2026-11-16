@@ -66,6 +66,7 @@ The left thumb moves you around (windows, back, apps, media); the right thumb pu
 | Close | Closes the focused window. Asks first: one tap arms it ("Close?"), a second tap within 3 s closes. At the top, out of the thumb's way. |
 | Scroll strip | Drag along it to scroll the focused window, like a mouse wheel: down moves further down the page. Let go while moving and it keeps going. With an Omarchy picker open, it scrolls that instead. |
 | Mic | Push-to-talk dictation, using Omarchy's default dictation backend (see [Dictation](#dictation)). Where the thumb rests, because you hold it while you speak. |
+| Command | Hold and say what you want done: "open the browser", "next tab", "what's the battery at", "remind me to...". It is handed to the voice assistant as a command, never typed, and the answer is spoken. Shown when there is an assistant to take it: your own `~/.config/tablet-mode/command-press` and `command-release`, else Cortex (`cortex-ctl command-down` / `command-up`). |
 | Enter | Sends Enter to the focused app: sends what you just said. |
 | Paste | Pastes into the focused app; hold to copy instead. Uses the terminal's own shortcuts in a terminal. On the typing side, with the mic, Enter and the keyboard. |
 | Keyboard | Shows or hides the on-screen keyboard. |

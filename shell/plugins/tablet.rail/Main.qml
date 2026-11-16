@@ -937,6 +937,25 @@ Item {
   function goForward() { run(["ydotool", "key", "56:1", "106:1", "106:0", "56:0"]) }
   // Same toggle as the four-finger swipe: fills the screen, bar and rail stay.
   function toggleMaximise() { run(["hyprctl", "dispatch", 'hl.dsp.window.fullscreen({ mode = "maximized" })']) }
+  // THE COMMAND BUTTON. The mic types what you say; this one DOES what you
+  // say ("open the browser", "next tab", "what is the battery at", "remind me
+  // to..."). Same gesture, hold and speak, but what is said is handed to the
+  // voice assistant as a command and never typed. bin/tablet-touch runs it:
+  // your own ~/.config/tablet-mode/command-press and command-release, else
+  // Cortex (`cortex-ctl command-down` / `command-up`). The button is there
+  // only when one of those is.
+  property bool hasCommand: false
+  property bool commandHeld: false                 // this capture is a command, not a dictation
+  onMicStateChanged: if (!listening && !busy) commandHeld = false
+  function commandPress() { commandHeld = true; Quickshell.execDetached([home + "/.local/bin/tablet-touch", "command-press"]) }
+  function commandRelease() { Quickshell.execDetached([home + "/.local/bin/tablet-touch", "command-release"]) }
+  Process {
+    id: commandProbe
+    running: true
+    command: [root.home + "/.local/bin/tablet-touch", "command-check"]
+    stdout: SplitParser { onRead: (line) => root.hasCommand = String(line).trim() === "yes" }
+  }
+  onSettingsOpenChanged: if (settingsOpen) commandProbe.running = true     // a backend installed since
   function micPress() { Quickshell.execDetached([home + "/.local/bin/tablet-touch", "mic-press"]) }
   function micRelease() { Quickshell.execDetached([home + "/.local/bin/tablet-touch", "mic-release"]) }
 
@@ -1307,12 +1326,15 @@ Item {
     // Rail: the one button filled with the accent colour while idle, so the
     // eye finds it first. Red while listening, pulsing while transcribing.
     property bool prominent: false
+    property string glyph: "\udb80\udf6c"         // a microphone; the command button passes its own
     property var skin: null            // see TouchButton
     property real corner: 0.5
     readonly property bool cap: skin !== null
     signal down()
     signal up()
-    readonly property color capBase: listening ? Color.urgent : (skin ? skin.accent : Color.accent)
+    property bool quiet: false         // an ordinary cap until it is listening (the command button)
+    readonly property color capBase: listening ? Color.urgent
+                                     : (skin ? (quiet ? skin.cap : skin.accent) : Color.accent)
     function inkOn(c) { return (c.r * 0.299 + c.g * 0.587 + c.b * 0.114) > 0.6 ? "#1b1c22" : "#ffffff" }
 
     readonly property bool solid: listening || busy || prominent
@@ -1390,7 +1412,7 @@ Item {
 
     Text {
       anchors.centerIn: parent
-      text: m.busy ? "󰔟" : "󰍬"
+      text: m.busy ? "󰔟" : m.glyph
       color: m.cap ? m.inkOn(m.capBase) : (m.solid ? Color.background : Color.popups.text)
       font.pixelSize: Math.round(m.size * 0.44)
       style: Text.Outline
@@ -2560,10 +2582,26 @@ Item {
           visible: root.hasMic
           size: 50
           prominent: true
-          listening: root.listening
-          busy: root.busy
+          listening: root.listening && !root.commandHeld
+          busy: root.busy && !root.commandHeld
           onDown: root.micPress()
           onUp: root.micRelease()
+        }
+
+        // Do what I say (see THE COMMAND BUTTON). Not filled like the mic, so
+        // the two are told apart at a glance.
+        MicButton {
+          skin: root.skin
+          corner: root.corner
+          Layout.alignment: Qt.AlignCenter
+          visible: root.hasCommand
+          size: 44
+          quiet: true
+          glyph: "\udb81\udea9"
+          listening: root.listening && root.commandHeld
+          busy: root.busy && root.commandHeld
+          onDown: root.commandPress()
+          onUp: root.commandRelease()
         }
 
         TouchButton {

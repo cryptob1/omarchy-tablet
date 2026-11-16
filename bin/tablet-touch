@@ -1,6 +1,9 @@
 #!/usr/bin/env python3
 """tablet-touch — what the rail's touch controls do (tablet.rail shell plugin).
 
+    tablet-touch command-press | command-release
+        The rail's command button: hold, speak a command, let go (see
+        command_command). command-check prints yes if there is a backend.
     tablet-touch mic-press | mic-release
         The mic button. Runs the dictation backend's press / release command
         (see DICTATION below) and locks focus on the dictation target while
@@ -207,6 +210,19 @@ def scroll_aim():
         hyprctl("dispatch", f"hl.dsp.cursor.move({{ x = {spot[0]}, y = {spot[1]} }})")
     else:
         park_pointer(active())
+
+
+def command_command(event):
+    """argv for the voice assistant's command press ("down") or release
+    ("up"), or None if there is none: your own
+    ~/.config/tablet-mode/command-press and command-release if they exist and
+    are executable, else Cortex (`cortex-ctl command-down` / `command-up`)."""
+    hook = os.path.join(CONF_DIR, "command-press" if event == "down" else "command-release")
+    if os.access(hook, os.X_OK):
+        return [hook]
+    if os.access(BIN + "cortex-ctl", os.X_OK):
+        return [BIN + "cortex-ctl", "command-" + event]
+    return None
 
 
 def cortex_idle():
@@ -441,6 +457,12 @@ def main():
         mic_release()
     elif cmd == "mic-guard" and len(args) > 1:
         mic_guard(float(args[1]))
+    elif cmd in ("command-press", "command-release"):
+        argv = command_command("down" if cmd == "command-press" else "up")
+        if argv:
+            subprocess.run(argv, timeout=5)
+    elif cmd == "command-check":
+        print("yes" if command_command("down") else "no")
     elif cmd == "next-window":
         switch_window()
     elif cmd in ("paste-here", "copy-here"):
