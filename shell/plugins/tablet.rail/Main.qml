@@ -2326,11 +2326,44 @@ Item {
         // across their width, so the whole frame reads as one raised moulding.
         // (flipped: the outside edge, and so the sheen, is at the bottom)
         var top = framed ? R : 0, band = framed ? frameBar : h    // locals: never assign the properties
-        var sg = frameFlip ? c.createLinearGradient(0, h, 0, top) : c.createLinearGradient(0, 0, 0, band)
+        // Both are a bevel of fixed depth, not a share of the band. Shaded
+        // as a share, a band tall enough to hold keys was dark for most of
+        // its height and met the rails as a different, darker piece.
+        var sheen = Math.min(14, band * 0.45), dusk = Math.min(10, band * 0.4)
+        var outer = frameFlip ? h : 0, inner = frameFlip ? top : band, dir = frameFlip ? -1 : 1
+        var sg = c.createLinearGradient(0, outer, 0, outer + dir * sheen)
         sg.addColorStop(0, "rgba(255,255,255,0.16)")
-        sg.addColorStop(0.45, "rgba(255,255,255,0)")
-        sg.addColorStop(1, "rgba(0,0,0,0.30)")
-        c.fillStyle = sg; c.fillRect(0, frameFlip ? top : 0, w, band)
+        sg.addColorStop(1, "rgba(255,255,255,0)")
+        c.fillStyle = sg; c.fillRect(0, Math.min(outer, outer + dir * sheen), w, sheen)
+        // The shadow where the frame meets the screen: along the opening
+        // only. Under the rails the band carries on as the rail does.
+        var xa = framed ? frameRail : 0, xb = framed ? w - frameRail : w
+        var dg = c.createLinearGradient(0, inner - dir * dusk, 0, inner)
+        dg.addColorStop(0, "rgba(0,0,0,0)")
+        dg.addColorStop(1, "rgba(0,0,0,0.30)")
+        c.fillStyle = dg; c.fillRect(xa, Math.min(inner, inner - dir * dusk), xb - xa, dusk)
+        // Where the band runs under (or over) a rail, the rail's own light
+        // carries on through it: the same pale outer edge, the same width.
+        // Without it each rail ended in a hard line across its foot.
+        if (framed && frameRail > 1) {
+          var by = frameFlip ? top : 0, lw = frameRail * 0.45
+          var lg = c.createLinearGradient(0, 0, lw, 0)
+          lg.addColorStop(0, "rgba(255,255,255,0.14)"); lg.addColorStop(1, "rgba(255,255,255,0)")
+          c.fillStyle = lg; c.fillRect(0, by, lw, band)
+          var rg = c.createLinearGradient(w, 0, w - lw, 0)
+          rg.addColorStop(0, "rgba(255,255,255,0.14)"); rg.addColorStop(1, "rgba(255,255,255,0)")
+          c.fillStyle = rg; c.fillRect(w - lw, by, lw, band)
+          // ...and its shadow towards the screen turns the corner with it:
+          // darkest at the inside corner, gone by the same distance the
+          // rail's own shadow takes to fade.
+          var dr = frameRail * 0.55
+          for (var side = 0; side < 2; side++) {
+            var cx = side ? w - frameRail : frameRail
+            var cg = c.createRadialGradient(cx, inner, 0, cx, inner, dr)
+            cg.addColorStop(0, "rgba(0,0,0,0.30)"); cg.addColorStop(1, "rgba(0,0,0,0)")
+            c.fillStyle = cg; c.fillRect(cx - dr, by, 2 * dr, band)
+          }
+        }
         if (framed) { c.fillStyle = "rgba(0,0,0,0.30)"; c.fillRect(0, frameFlip ? 0 : band, w, top) }
         // The chamfer along the outer edge, as on the rails.
         c.fillStyle = "rgba(255,255,255,0.42)"; c.fillRect(0, frameFlip ? h - 1 : 0, w, 1)
