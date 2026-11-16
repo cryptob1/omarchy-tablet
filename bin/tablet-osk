@@ -41,7 +41,10 @@ LOCK_IDLE=45
 state="${XDG_STATE_HOME:-$HOME/.local/state}/tablet-mode"
 lock_show() {
   if [ "$(cat "$state/keyboard" 2>/dev/null)" != "full" ]; then
-    mkdir -p "$state"; echo 1 > "$state/lock-keyboard"
+    # A number pad if the lock screen will take a PIN right now (bin/tablet-pin).
+    local kind=1
+    [ "$(tablet-pin status 2>/dev/null)" = ready ] && kind=pin
+    mkdir -p "$state"; echo "$kind" > "$state/lock-keyboard"
     for _ in 1 2 3 4 5 6 7 8; do
       hyprctl layers 2>/dev/null | grep -q "namespace: omarchy-tablet-keys" && return 0
       sleep 0.25
@@ -60,6 +63,10 @@ lock_watch() {
   lock_show
   while locked; do
     sleep 1
+    # Five wrong PINs: the pad gives way to the letters, for the password.
+    if [ "$(cat "$state/lock-keyboard" 2>/dev/null)" = pin ] && [ "$(tablet-pin status 2>/dev/null)" != ready ]; then
+      echo 1 > "$state/lock-keyboard"
+    fi
     now=$(date +%s)
     mark=$(stat -c %Y "$dir/touch" 2>/dev/null || echo "$now")
     if [ $((now - mark)) -ge "$LOCK_IDLE" ]; then

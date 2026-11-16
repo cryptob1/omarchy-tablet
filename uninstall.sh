@@ -10,7 +10,7 @@ for p in tablet.rail tablet.screenoff; do
   omarchy plugin disable "$p" >/dev/null 2>&1 || true
   rm -rf "$HOME/.config/omarchy/plugins/$p"
 done
-for b in tablet-gestures tablet-touch tablet-osk tablet-mode tablet-power; do rm -f "$HOME/.local/bin/$b"; done
+for b in tablet-gestures tablet-touch tablet-osk tablet-mode tablet-power tablet-pin; do rm -f "$HOME/.local/bin/$b"; done
 rm -f "$HOME/.config/hypr/omarchy-tablet.lua" "$HOME/.config/hypr/omarchy-tablet-rotation.lua"
 rm -f "$HOME/.local/share/omarchy-tablet/tap.wav"; rmdir "$HOME/.local/share/omarchy-tablet" 2>/dev/null || true
 conf="$HOME/.config/hypr/hyprland.lua"

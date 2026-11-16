@@ -1,0 +1,287 @@
+#!/usr/bin/env python3
+"""tablet-pin — a PIN for the lock screen, and only the lock screen.
+
+A tablet's password is typed on glass, many times a day. This lets the lock
+screen also take a short PIN, hedged the way a phone hedges it:
+
+  - six digits or more;
+  - five wrong PINs and the PIN is off until the full password is used;
+  - the PIN works only if the full password has unlocked this screen since
+    the last restart, and within the last 24 hours;
+  - the full password always works, and nothing else changes: sudo, login,
+    ssh and the disk's passphrase never see the PIN.
+
+    tablet-pin set          choose the PIN (asked for twice, not echoed)
+    tablet-pin clear        forget the PIN
+    tablet-pin status       unset | ready | needs-password | locked
+    sudo tablet-pin install     add it to the lock screen's sign-in (PAM)
+    sudo tablet-pin confirm     keep that change (else it undoes itself
+                                ten minutes after install)
+    sudo tablet-pin uninstall   take it out again
+
+HOW IT IS WIRED. Omarchy's lock screen authenticates through the PAM service
+/etc/pam.d/omarchy-lock-password. `install` adds two lines to it:
+
+    auth [success=done default=ignore] pam_exec.so expose_authtok quiet /usr/local/bin/tablet-pin check
+        before pam_unix: what was typed is handed to `check`. Exit 0 (a good
+        PIN, allowed right now) ends the stack in success. Anything else,
+        including this program crashing or being absent, is ignored, and the
+        password is checked exactly as before.
+
+    auth optional pam_exec.so quiet /usr/local/bin/tablet-pin arm
+        at the end of the stack, which is reached only when the PASSWORD was
+        right: it starts the 24 hours and clears the count of wrong PINs.
+
+WHAT THE PIN FILE IS WORTH. The lock screen's PAM runs as you, not as root, so
+the PIN's hash (~/.config/tablet-mode/pin, mode 600, scrypt) has to be readable
+by you; so do the wrong-PIN count and the 24-hour stamp, which live in
+/run/user/<uid> and so do not survive a restart. A program already running as
+you could therefore work the PIN out, or reset the count. Such a program is
+already past the lock screen; the PIN defends against a person holding the
+tablet, who can do neither. Do not use this PIN for anything else.
+
+THE SAFETY NET. A mistake in a PAM file can lock you out of the lock screen.
+`install` keeps the original beside it and starts a ten-minute timer that puts
+it back; lock, unlock with the password, unlock with the PIN, and only then
+`confirm`.
+"""
+import getpass
+import hashlib
+import hmac
+import json
+import os
+import pwd
+import shutil
+import subprocess
+import sys
+import time
+
+MIN_DIGITS = 6
+TRIES = 5
+MAX_AGE = 24 * 3600
+PAM_FILE = "/etc/pam.d/omarchy-lock-password"
+BACKUP = PAM_FILE + ".before-tablet-pin"
+SYSTEM_BIN = "/usr/local/bin/tablet-pin"
+MARK = "tablet-pin"
+SCRYPT = {"n": 2 ** 15, "r": 8, "p": 1, "dklen": 32}
+REVERT_UNIT = "tablet-pin-revert"
+
+
+def user():
+    """Whose PIN: the user PAM is authenticating, else whoever runs this (the
+    real user, under sudo)."""
+    name = os.environ.get("PAM_USER") or os.environ.get("SUDO_USER") or getpass.getuser()
+    return pwd.getpwnam(name)
+
+
+def paths(pw):
+    run = os.path.join("/run/user", str(pw.pw_uid), "tablet-mode")
+    return {
+        "pin": os.path.join(pw.pw_dir, ".config", "tablet-mode", "pin"),
+        "armed": os.path.join(run, "pin-armed"),
+        "fails": os.path.join(run, "pin-fails"),
+        "run": run,
+    }
+
+
+def is_pin(text):
+    return text.isascii() and text.isdigit() and MIN_DIGITS <= len(text) <= 16
+
+
+def digest(pin, salt):
+    return hashlib.scrypt(pin.encode(), salt=salt, maxmem=2 ** 27, **SCRYPT)
+
+
+def read_int(path):
+    try:
+        with open(path) as f:
+            return int(f.read().strip() or 0)
+    except (OSError, ValueError):
+        return 0
+
+
+def write(path, text):
+    os.makedirs(os.path.dirname(path), mode=0o700, exist_ok=True)
+    fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    with os.fdopen(fd, "w") as f:
+        f.write(text)
+
+
+def state(p, now=None):
+    """unset | locked | needs-password | ready"""
+    now = time.time() if now is None else now
+    if not os.path.exists(p["pin"]):
+        return "unset"
+    if read_int(p["fails"]) >= TRIES:
+        return "locked"
+    try:
+        with open(p["armed"]) as f:
+            armed = float(f.read().strip())
+    except (OSError, ValueError):
+        return "needs-password"
+    # A stamp from the future is a clock that moved: do not trust it.
+    return "ready" if 0 <= now - armed < MAX_AGE else "needs-password"
+
+
+def check(p, typed, now=None):
+    """Whether `typed` unlocks. Only something shaped like a PIN is treated as
+    an attempt at one: a wrong PASSWORD must not use up the PIN's tries."""
+    if not is_pin(typed) or state(p, now) != "ready":
+        return False
+    try:
+        with open(p["pin"]) as f:
+            saved = json.load(f)
+        good = hmac.compare_digest(digest(typed, bytes.fromhex(saved["salt"])), bytes.fromhex(saved["hash"]))
+    except (OSError, ValueError, KeyError):
+        return False
+    if good:
+        write(p["fails"], "0\n")
+        return True
+    write(p["fails"], "%d\n" % (read_int(p["fails"]) + 1))
+    return False
+
+
+def arm(p, now=None):
+    write(p["armed"], "%.0f\n" % (time.time() if now is None else now))
+    write(p["fails"], "0\n")
+
+
+def cmd_set(p):
+    first = getpass.getpass("New PIN (%d digits or more): " % MIN_DIGITS)
+    if not is_pin(first):
+        print("A PIN is %d to 16 digits, and nothing else." % MIN_DIGITS, file=sys.stderr)
+        return 1
+    if len(set(first)) == 1 or first in "01234567890123456789" or first in "98765432109876543210":
+        print("That one is among the first anyone would try. Pick another.", file=sys.stderr)
+        return 1
+    if getpass.getpass("Again: ") != first:
+        print("They differ. Nothing changed.", file=sys.stderr)
+        return 1
+    salt = os.urandom(16)
+    write(p["pin"], json.dumps({"salt": salt.hex(), "hash": digest(first, salt).hex(), "kdf": "scrypt", **SCRYPT}) + "\n")
+    write(p["fails"], "0\n")
+    print("PIN set. It works after the next unlock with your password, for %d hours at a time." % (MAX_AGE // 3600))
+    if not installed():
+        print("The lock screen does not ask for it yet: run  sudo %s install" % os.path.abspath(sys.argv[0]))
+    return 0
+
+
+# ------------------------------------------------------------------- PAM
+
+CHECK_LINE = "auth       [success=done default=ignore]  pam_exec.so expose_authtok quiet %s check   # %s\n" % (SYSTEM_BIN, MARK)
+ARM_LINE = "auth       optional                    pam_exec.so quiet %s arm   # %s\n" % (SYSTEM_BIN, MARK)
+
+
+def installed():
+    try:
+        with open(PAM_FILE) as f:
+            return MARK in f.read()
+    except OSError:
+        return False
+
+
+def with_pin(lines):
+    """The PAM stack with our two lines: check before the first pam_unix auth
+    line, arm after the last auth line. None if the file is not the shape this
+    was written for (then nothing is changed)."""
+    lines = [l for l in lines if MARK not in l]
+    auth = [i for i, l in enumerate(lines) if l.split()[:1] in (["auth"], ["-auth"])]
+    unix = [i for i in auth if "pam_unix.so" in lines[i]]
+    if not unix or not auth:
+        return None
+    first = unix[0]
+    # Stay ahead of an optional pam_systemd_home line that jumps over pam_unix.
+    while first - 1 in auth and "pam_faillock.so" not in lines[first - 1]:
+        first -= 1
+    out = lines[:first] + [CHECK_LINE] + lines[first:]
+    last = max(i for i, l in enumerate(out) if l.split()[:1] in (["auth"], ["-auth"]))
+    return out[:last + 1] + [ARM_LINE] + out[last + 1:]
+
+
+def need_root():
+    if os.geteuid() != 0:
+        print("This changes the lock screen's sign-in: run it with sudo.", file=sys.stderr)
+        sys.exit(1)
+
+
+def cmd_install():
+    need_root()
+    with open(PAM_FILE) as f:
+        lines = f.readlines()
+    new = with_pin(lines)
+    if new is None:
+        print("%s is not laid out as expected; nothing changed." % PAM_FILE, file=sys.stderr)
+        return 1
+    if not os.path.exists(BACKUP) or MARK not in "".join(lines):
+        with open(BACKUP, "w") as f:
+            f.writelines(l for l in lines if MARK not in l)
+    shutil.copyfile(os.path.abspath(sys.argv[0]), SYSTEM_BIN)
+    os.chmod(SYSTEM_BIN, 0o755)
+    tmp = PAM_FILE + ".tablet-pin-new"
+    with open(tmp, "w") as f:
+        f.writelines(new)
+    os.chmod(tmp, 0o644)
+    os.replace(tmp, PAM_FILE)
+    subprocess.run(["systemctl", "stop", REVERT_UNIT + ".timer"], capture_output=True)
+    subprocess.run(["systemd-run", "--quiet", "--unit=" + REVERT_UNIT, "--on-active=600",
+                    SYSTEM_BIN, "uninstall"], check=False)
+    print("Installed. The original is kept as %s." % BACKUP)
+    print("It will be put back in 10 minutes unless you run:  sudo tablet-pin confirm")
+    print("Before that: lock, unlock with your PASSWORD, lock, unlock with the PIN.")
+    return 0
+
+
+def cmd_confirm():
+    need_root()
+    subprocess.run(["systemctl", "stop", REVERT_UNIT + ".timer"], capture_output=True)
+    print("Kept." if installed() else "It is not installed (the ten minutes may have passed).")
+    return 0
+
+
+def cmd_uninstall():
+    need_root()
+    with open(PAM_FILE) as f:
+        lines = f.readlines()
+    tmp = PAM_FILE + ".tablet-pin-new"
+    with open(tmp, "w") as f:
+        f.writelines(l for l in lines if MARK not in l)
+    os.chmod(tmp, 0o644)
+    os.replace(tmp, PAM_FILE)
+    print("Removed from %s." % PAM_FILE)
+    return 0
+
+
+def main(argv):
+    cmd = argv[1] if len(argv) > 1 else ""
+    if cmd in ("install", "confirm", "uninstall"):
+        return {"install": cmd_install, "confirm": cmd_confirm, "uninstall": cmd_uninstall}[cmd]()
+    try:
+        p = paths(user())
+    except KeyError:
+        return 1
+    if cmd == "check":
+        # pam_exec hands the typed text on stdin, with a NUL after it.
+        typed = sys.stdin.buffer.read(512).split(b"\0")[0].decode("utf-8", "replace").rstrip("\r\n")
+        return 0 if check(p, typed) else 1
+    if cmd == "arm":
+        arm(p)
+        return 0
+    if cmd == "status":
+        print(state(p))
+        return 0
+    if cmd == "set":
+        return cmd_set(p)
+    if cmd == "clear":
+        for k in ("pin", "armed", "fails"):
+            try:
+                os.remove(p[k])
+            except OSError:
+                pass
+        print("PIN forgotten.")
+        return 0
+    print(__doc__.split("\n\n")[2], file=sys.stderr)
+    return 2
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv))

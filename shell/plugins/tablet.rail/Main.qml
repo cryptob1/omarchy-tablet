@@ -459,6 +459,19 @@ Item {
   // when a locked tablet is touched, and the Hyprland fragment lets this
   // surface sit above the lock and take touches.
   property bool kbLock: false
+  // ...as a number pad, when the lock screen will take a PIN right now
+  // (bin/tablet-pin; bin/tablet-osk writes "pin" then). "abc" on the pad
+  // swaps to the letters for the full password.
+  property bool kbPinMode: false
+  property bool kbPinLetters: false
+  readonly property bool kbPin: kbLock && kbPinMode && !kbPinLetters
+  onKbLockChanged: kbPinLetters = false
+  readonly property var kbPad: [
+    [{ l: "1", c: 2 }, { l: "2", c: 3 }, { l: "3", c: 4 }],
+    [{ l: "4", c: 5 }, { l: "5", c: 6 }, { l: "6", c: 7 }],
+    [{ l: "7", c: 8 }, { l: "8", c: 9 }, { l: "9", c: 10 }],
+    [{ l: "abc", a: "letters" }, { l: "0", c: 11 }, { l: "\u232b", c: 14, r: true }, { l: "\u23ce", c: 28 }]
+  ]
   property bool kbShift: false                     // for the next letter only
   property bool kbCaps: false                      // until tapped again (tap Shift twice)
   property bool kbCtrl: false                      // for the next key only
@@ -499,6 +512,7 @@ Item {
       return
     }
     if (key.a === "ctrl") { kbCtrl = !kbCtrl; return }
+    if (key.a === "letters") { kbPinLetters = true; return }
     var codes = []
     if (kbCtrl) codes.push(29)
     if (key.s || (key.letter && (kbShift || kbCaps))) codes.push(42)
@@ -522,8 +536,8 @@ Item {
     watchChanges: true
     printErrors: false
     onFileChanged: reload()
-    onLoaded: root.kbLock = text().trim() === "1"
-    onLoadFailed: root.kbLock = false
+    onLoaded: { var v = text().trim(); root.kbLock = v === "1" || v === "pin"; root.kbPinMode = v === "pin" }
+    onLoadFailed: { root.kbLock = false; root.kbPinMode = false }
   }
   FileView {
     path: root.stateDir + "/keyboard"
@@ -3420,6 +3434,7 @@ Item {
       Column {
         id: block
         required property var modelData
+        visible: !root.kbPin
         spacing: kbWin.gap
         y: 10 + (kbWin.stacked && modelData.side !== "middle" ? 4 * (kbWin.keyH + kbWin.gap) : 0)
         x: modelData.side === "left" ? 10
@@ -3447,6 +3462,37 @@ Item {
                 onPressedDown: root.click()
                 onHit: root.kbPress(modelData)
               }
+            }
+          }
+        }
+      }
+    }
+      // The number pad, for a PIN on the lock screen: big keys, in the middle.
+    Column {
+      visible: root.kbPin
+      anchors.horizontalCenter: parent.horizontalCenter
+      y: 10
+      spacing: kbWin.gap
+      Repeater {
+        model: root.kbPad
+        Row {
+          id: padLine
+          required property var modelData
+          spacing: kbWin.gap
+          anchors.horizontalCenter: parent.horizontalCenter
+          Repeater {
+            model: padLine.modelData
+            KeyCap {
+              required property var modelData
+              skin: root.skin
+              corner: Math.min(root.corner, 0.28)
+              wide: padLine.modelData.length > 3 ? 96 : 130
+              tall: kbWin.keyH
+              labelSize: modelData.a ? 15 : 21
+              label: modelData.l
+              repeats: !!modelData.r
+              onPressedDown: root.click()
+              onHit: root.kbPress(modelData)
             }
           }
         }

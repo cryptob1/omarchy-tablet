@@ -152,6 +152,19 @@ Next to the clock are a Wi-Fi key and a Bluetooth key, which open Omarchy's own 
 
 It is also the keyboard on the lock screen: touch a locked tablet and it comes up (the full-width one does instead if you chose that, or if this one fails to appear). The rail's keyboard button opens it. `tablet-mode keyboard full` switches to the full-width keyboard (wvkbd), `split` goes back. It is also in the settings panel.
 
+**A PIN for the lock screen.** A password is a lot to type on glass many times a day. `tablet-pin` lets Omarchy's lock screen also take a PIN, hedged as a phone hedges it: six digits or more; five wrong PINs and it is off until the password is used; it works only if the full password has unlocked the screen since the last restart and within the last 24 hours. The full password always works, and nothing else ever sees the PIN: not sudo, not login, not ssh, not the disk's passphrase. While the PIN is usable the lock screen's keyboard is a number pad (its "abc" key brings the letters back).
+
+It is off until you turn it on, because it changes how the machine is unlocked:
+
+```
+tablet-pin set               # choose the PIN
+sudo tablet-pin install      # add it to the lock screen's sign-in (two lines in /etc/pam.d/omarchy-lock-password)
+                             # ...lock, unlock with the password, lock, unlock with the PIN...
+sudo tablet-pin confirm      # keep it; without this, install undoes itself after ten minutes
+```
+
+`sudo tablet-pin uninstall` takes it out; `tablet-pin clear` forgets the PIN. What it is and is not worth is written at the top of `bin/tablet-pin`: it defends against a person holding the tablet, not against a program already running as you.
+
 **Load.** Three meters in the bottom bezel: processor, memory and battery, each with its percentage. Processor and memory turn the look's warning colour above 85%, the battery below 15%. With the key strip up they shrink to small plates at its ends.
 
 **Button sounds.** `tablet-mode sounds on` (or the settings panel) plays a soft tap as a button goes down. Off by default. The mic never makes one: it would be the first thing your dictation hears.
