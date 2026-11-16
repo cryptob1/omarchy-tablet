@@ -398,10 +398,12 @@ Item {
       { l: "Esc", k: [1] }, { l: "Tab", k: [15] }, { l: "\u21e7Tab", k: [42, 15] }, { l: "Ctrl C", k: [29, 46] },
       { l: "\u2190", k: [105], r: true }, { l: "\u2191", k: [103], r: true }, { l: "\u2193", k: [108], r: true }, { l: "\u2192", k: [106], r: true },
       { l: "1", k: [2] }, { l: "2", k: [3] }, { l: "3", k: [4] }, { l: "/", k: [53] }, { l: "\u232b", k: [14], r: true },
-      // Types a line and sends it. "! sudo -v" refreshes sudo's password
-      // timer; the "!" makes it a shell command at Claude Code's prompt and
-      // is harmless at a shell's (it only inverts the exit status).
-      { l: "sudo", t: "! sudo -v" }
+      // Opens a small floating terminal that runs `sudo -v` (asks for the
+      // password, then closes) and brings up the keyboard to type it on.
+      // For a sudo whose password timer is shared by every terminal
+      // (`Defaults timestamp_type=global`); with sudo's default, a timer per
+      // terminal, it refreshes only that pop-up's own.
+      { l: "sudo", sudo: true }
     ],
     browser: [
       { l: "Forward", k: [56, 106] }, { l: "Reload", k: [29, 19] },
@@ -411,6 +413,15 @@ Item {
     ]
   })
   readonly property var keySet: keySets[keyContext] || keySets.terminal
+  function askSudo() {
+    // Focused by hand afterwards: a setup that stops new windows taking the
+    // focus would leave the password prompt waiting unseen behind a
+    // "needs attention" notice.
+    Quickshell.execDetached(["sh", "-c",
+      "uwsm-app -- xdg-terminal-exec --app-id=org.omarchy.terminal --title=sudo -e sudo -v & " +
+      "for i in 1 2 3 4; do sleep 0.35; hyprctl dispatch 'hl.dsp.focus({ window = \"title:^sudo$\" })' >/dev/null 2>&1; done"])
+    if (noKeyboard && keyboardPref.trim() !== "full") kbOpen = true
+  }
   // Type a line into the focused app and press Enter.
   function typeLine(text) {
     Quickshell.execDetached(["sh", "-c", 'ydotool type -- "$1" && ydotool key 28:1 28:0', "sh", text])
@@ -3168,7 +3179,7 @@ Item {
           labelSize: keyRow.tight ? 12 : 13
           repeats: !!modelData.r
           onPressedDown: root.click()
-          onHit: modelData.t ? root.typeLine(modelData.t) : root.sendKeys(modelData.k)
+          onHit: modelData.sudo ? root.askSudo() : (modelData.t ? root.typeLine(modelData.t) : root.sendKeys(modelData.k))
         }
       }
     }
