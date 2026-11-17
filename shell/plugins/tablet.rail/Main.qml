@@ -1696,7 +1696,7 @@ Item {
       Qt.alpha(off ? mark : hot, off ? 0.18 : 0.42))
     // Which third is under the finger: 0 top, 1 middle, 2 bottom, -1 none.
     readonly property int pressedThird: upArea.pressed ? 0 : (midArea.pressed ? 1 : (downArea.pressed ? 2 : -1))
-    implicitWidth: 50; implicitHeight: 96      // short: the left rail is full
+    implicitWidth: 50; implicitHeight: 84      // short: the left rail is full
     radius: width * corner
     border.color: cap ? Qt.alpha("black", 0.6) : Color.popups.border
     border.width: cap ? 1.5 : 2
@@ -2583,8 +2583,11 @@ Item {
         anchors.fill: parent
         anchors.margins: 7
         flow: rail.upright ? GridLayout.LeftToRight : GridLayout.TopToBottom
-        rowSpacing: 10
-        columnSpacing: 10
+        // 8, and every button below the desktop arrow 50 tall, on both rails:
+        // five buttons under "next" here and five under "previous" there, so
+        // the two arrows sit at exactly the same height.
+        rowSpacing: 8
+        columnSpacing: 8
 
         // The right hand (see the left rail for the reasoning). Close at the
         // top, where it cannot be hit by accident; the scroll wheel through the
@@ -2731,7 +2734,7 @@ Item {
           corner: root.corner
           Layout.alignment: Qt.AlignCenter
           visible: root.hasCommand
-          size: 44
+          size: 50                      // as tall as the rest (see rowSpacing above)
           quiet: true
           glyph: "\udb81\udea9"
           listening: root.listening && root.commandHeld
@@ -2941,7 +2944,7 @@ Item {
       ColumnLayout {
         anchors.fill: parent
         anchors.margins: 7
-        spacing: 10
+        spacing: 8                      // with the rockers at 84: thirteen controls fit the rail's height
 
         // LAID OUT FOR THE HAND THAT HOLDS IT. A 13-inch tablet has weight: you
         // grip it low on each side, palm under the corner, and the thumb rests
