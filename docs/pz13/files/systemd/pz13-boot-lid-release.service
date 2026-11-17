@@ -1,0 +1,17 @@
+[Unit]
+Description=ASUS ProArt PZ13: hand the lid sensor back to logind after the desktop is up
+# Second half of pz13-boot-lid-guard.service. Waits for the display manager,
+# gives the autologin session a minute to settle, then drops the runtime
+# override and has logind re-read its configuration. From then on closing the
+# lid suspends as usual.
+After=display-manager.service systemd-logind.service pz13-boot-lid-guard.service
+Requires=pz13-boot-lid-guard.service
+
+[Service]
+Type=oneshot
+ExecStart=/bin/sleep 60
+ExecStart=/bin/rm -f /run/systemd/logind.conf.d/zz-pz13-boot-lid-guard.conf
+ExecStart=/usr/bin/systemctl reload systemd-logind.service
+
+[Install]
+WantedBy=graphical.target

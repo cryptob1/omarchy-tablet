@@ -1,0 +1,42 @@
+#!/bin/bash
+# Install side of the touch-unlock hook: unl0kr and what it needs to find the
+# touchscreen (libinput's udev helpers and quirks) and to lay out a keyboard.
+# cryptsetup and dm-crypt come with the `encrypt` hook, which must stay in HOOKS
+# after this one — it is the fallback.
+
+build() {
+    add_binary '/usr/bin/unl0kr'
+    add_binary 'timeout'
+    add_file '/etc/unl0kr.conf'
+    [[ -d /etc/unl0kr.conf.d ]] && add_full_dir '/etc/unl0kr.conf.d'
+
+    map add_module 'hid-generic?' 'hid-multitouch?'
+    add_checked_modules '/input/touchscreen/'
+
+    add_file '/usr/lib/udev/hwdb.bin'
+    [[ -f /etc/udev/hwdb.bin ]] && add_file '/etc/udev/hwdb.bin'
+    add_binary '/usr/lib/udev/libinput-device-group'
+    add_binary '/usr/lib/udev/libinput-fuzz-extract'
+    add_binary '/usr/lib/udev/libinput-fuzz-to-zero'
+    map add_udev_rule \
+        '60-evdev.rules' \
+        '60-input-id.rules' \
+        '70-mouse.rules' \
+        '70-touchpad.rules' \
+        '80-libinput-device-groups.rules' \
+        '90-libinput-fuzz-override.rules'
+    [[ -f /usr/lib/udev/rules.d/65-libwacom.rules ]] && add_udev_rule '65-libwacom.rules'
+
+    add_full_dir '/usr/share/libinput'
+    add_full_dir '/usr/share/X11/xkb'
+
+    add_runscript
+}
+
+help() {
+    cat <<HELPEOF
+Asks for the disk password with unl0kr's on-screen keyboard before the encrypt
+hook runs. Place it immediately before 'encrypt' in HOOKS; encrypt remains the
+fallback when unl0kr cannot be used.
+HELPEOF
+}

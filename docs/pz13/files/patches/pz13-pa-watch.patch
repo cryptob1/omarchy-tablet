@@ -1,0 +1,58 @@
+--- ../wsa-a/wsa884x.c	2026-11-16 11:45:54.067692726 -0800
++++ wsa884x.c	2026-11-16 11:46:23.092865668 -0800
+@@ -1698,6 +1698,19 @@
+  * Recover the PA state machine using the sequence from Qualcomm's downstream
+  * WSA884x driver.  Caller serializes this with sp_lock.
+  */
++/* -1: per board (default), 0: never, 1: always */
++static int pa_watch = -1;
++module_param(pa_watch, int, 0644);
++MODULE_PARM_DESC(pa_watch, "Watch for and recover latched PA faults (-1: per board, 0: off, 1: on)");
++
++struct wsa884x_priv;
++static bool wsa884x_pa_watch(struct wsa884x_priv *wsa884x);
++
++static bool wsa884x_pa_watch(struct wsa884x_priv *wsa884x)
++{
++	return pa_watch >= 0 ? pa_watch : wsa884x->pa_watch;
++}
++
+ static int wsa884x_recover_pa(struct wsa884x_priv *wsa884x, bool reenable)
+ {
+ 	unsigned int sta0 = 0, sta1 = 0, err0 = 0, err1 = 0;
+@@ -1995,7 +2008,7 @@
+ 					      WSA884X_PDM_WD_CTL_PDM_WD_EN_MASK,
+ 					      0x1);
+ 
+-		if (wsa884x->pa_watch)
++		if (wsa884x_pa_watch(wsa884x))
+ 			mod_delayed_work(system_wq, &wsa884x->pa_health_work,
+ 					 msecs_to_jiffies(WSA884X_PA_HEALTH_INTERVAL_MS));
+ 		break;
+@@ -2110,7 +2123,7 @@
+ 		 * stream. An underrun restart unmutes without powering the
+ 		 * widget down and up, so don't switch it back on here.
+ 		 */
+-		if (wsa884x->pa_watch &&
++		if (wsa884x_pa_watch(wsa884x) &&
+ 		    wsa884x->pa_recovery_failures >= WSA884X_PA_RECOVERY_FAILURES)
+ 			return 0;
+ 
+@@ -2118,7 +2131,7 @@
+ 		 * A PA_ON_ERR can remain latched across a normal graph
+ 		 * teardown.  Clear it before trying to start the amplifier.
+ 		 */
+-		if (wsa884x->pa_watch &&
++		if (wsa884x_pa_watch(wsa884x) &&
+ 		    !regmap_read(wsa884x->regmap, WSA884X_PA_FSM_STA1, &sta1) &&
+ 		    (sta1 & WSA884X_PA_ERROR_MASK))
+ 			wsa884x_recover_pa(wsa884x, false);
+@@ -2129,7 +2142,7 @@
+ 		snd_soc_component_write_field(component, WSA884X_PA_FSM_EN,
+ 					      WSA884X_PA_FSM_EN_GLOBAL_PA_EN_MASK,
+ 					      0x1);
+-		if (wsa884x->pa_watch) {
++		if (wsa884x_pa_watch(wsa884x)) {
+ 			usleep_range(1000, 1100);
+ 
+ 			if (!regmap_read(wsa884x->regmap, WSA884X_PA_FSM_STA1, &sta1) &&

@@ -1,0 +1,24 @@
+[Unit]
+Description=ASUS ProArt PZ13: ignore the lid sensor while the desktop starts
+# logind suspends the moment it starts if the lid sensor reads "closed". Its
+# built-in startup grace period is counted from kernel start, and on this
+# machine the kernel can sit at the disk-password prompt for any length of
+# time, so the grace is usually over before logind runs. A suspend at that
+# moment freezes user.slice while SDDM is logging in; the autologin session
+# then fails ("Cannot start frozen unit") and the screen stays black.
+#
+# This writes a runtime-only logind drop-in before logind starts.
+# pz13-boot-lid-release.service removes it once the desktop is up.
+# Installed by items/pz13-boot-lid-guard.sh.
+DefaultDependencies=no
+After=systemd-tmpfiles-setup.service
+Before=systemd-logind.service shutdown.target
+Conflicts=shutdown.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/bin/sh -c 'mkdir -p /run/systemd/logind.conf.d && printf "[Login]\nHandleLidSwitch=ignore\nHandleLidSwitchExternalPower=ignore\nHandleLidSwitchDocked=ignore\n" > /run/systemd/logind.conf.d/zz-pz13-boot-lid-guard.conf'
+
+[Install]
+WantedBy=multi-user.target

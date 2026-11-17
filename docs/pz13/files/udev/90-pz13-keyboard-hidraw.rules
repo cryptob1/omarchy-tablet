@@ -1,0 +1,4 @@
+# ASUS ProArt PZ13 keyboard (USB 0B05:1B6E): let the input group read its raw
+# HID reports, so bin/pz13-copilot-hold can see the Copilot key's release (which
+# evdev drops). Same exposure as the /dev/input event nodes `input` already reads.
+SUBSYSTEM=="hidraw", ATTRS{idVendor}=="0b05", ATTRS{idProduct}=="1b6e", GROUP="input", MODE="0660"

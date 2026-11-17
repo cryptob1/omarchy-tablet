@@ -1,0 +1,19 @@
+[Unit]
+Description=ASUS ProArt PZ13: charge the battery to 95%
+# The firmware resets the charge limit to start 75 / stop 80 on every boot.
+# The battery gauge appears a few seconds after boot (it comes up over the
+# pmic-glink link), so wait for it, then write. The stop threshold goes first:
+# the driver rejects a start threshold above the current stop threshold.
+# The file can exist before the gauge answers (the write then fails with
+# EAGAIN), so the write itself is retried, not just the wait for the file.
+# Installed by items/pz13-charge-limit.sh.
+After=multi-user.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+Environment=BAT=/sys/class/power_supply/qcom-battmgr-bat
+ExecStart=/bin/sh -c 'i=0; until { [ -w "$BAT/charge_control_end_threshold" ] && echo 95 > "$BAT/charge_control_end_threshold" && echo 90 > "$BAT/charge_control_start_threshold"; } 2>/dev/null; do i=$((i+1)); [ $i -ge 60 ] && exit 1; sleep 1; done'
+
+[Install]
+WantedBy=multi-user.target

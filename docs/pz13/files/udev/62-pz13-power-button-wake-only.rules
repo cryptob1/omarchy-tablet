@@ -1,0 +1,16 @@
+# ASUS ProArt PZ13: only the power button wakes the machine from suspend,
+# like a phone or tablet. By default the touchscreen ended most sleeps within
+# seconds (any touch, palm or stylus contact).
+#
+# Left armed on purpose: the power key, and the battery / charger / thermal
+# sources, which exist so the machine can react to a critically low battery
+# or overheating while asleep.
+
+# Touchscreen + stylus (ELAN 04F3:430A) and the keyboard-cover HID.
+ACTION=="add|bind", SUBSYSTEM=="i2c", KERNEL=="0-0010|1-0017", ATTR{power/wakeup}="disabled"
+# Volume keys and the cover (lid) sensor. Closing the cover still suspends.
+ACTION=="add|bind", SUBSYSTEM=="platform", KERNEL=="gpio-keys", ATTR{power/wakeup}="disabled"
+# USB controllers (attached keyboard, dongles).
+ACTION=="add|bind", SUBSYSTEM=="platform", KERNEL=="a600000.usb|a800000.usb", ATTR{power/wakeup}="disabled"
+# PCIe root ports (Wi-Fi wake-on-wireless, NVMe).
+ACTION=="add|bind", SUBSYSTEM=="pci", KERNEL=="0004:00:00.0|0006:00:00.0", ATTR{power/wakeup}="disabled"

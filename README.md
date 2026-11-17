@@ -45,4 +45,6 @@ Everything else is in the settings panel (the cog at the top of the left rail): 
 
 Built and used on one machine: an ASUS ProArt PZ13 (Snapdragon, detachable keyboard) on Omarchy 4, Hyprland 0.57 and Ghostty 1.4. Expect rough edges elsewhere, and please open an issue with what you find.
 
+Running Omarchy on a PZ13 yourself? [The PZ13 notes](docs/pz13/README.md) cover what the machine needed beyond a stock install: the disk prompt without a keyboard, sleep that stays asleep, the charge limit, and the speaker fault.
+
 MIT licensed.

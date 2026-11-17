@@ -1,0 +1,29 @@
+#!/bin/sh
+# ASUS ProArt PZ13: switch off what keeps drawing power through suspend-to-idle.
+#
+# s2idle on this Snapdragon X tablet never reaches the SoC's deepest state
+# (qcom_stats cxsd stays 0), and USB and Bluetooth stay powered through it.
+# Measured 2026-11-10: 0.66 W asleep one night, 1.78 W the next day with the
+# keyboard cover closed and its backlight at full. So before sleeping: keyboard
+# light off (level kept) and Bluetooth blocked; both come back on wake.
+# @USER@ is filled in by items/pz13-sleep.sh.
+user=@USER@
+light=/home/$user/.local/bin/pz13-kbdlight
+mark=/run/pz13-quiet-sleep.bluetooth
+case "$1" in
+  pre)
+    [ -x "$light" ] && runuser -u "$user" -- "$light" dark >/dev/null 2>&1
+    if rfkill list bluetooth 2>/dev/null | grep -q "Soft blocked: no"; then
+      : > "$mark"
+      rfkill block bluetooth
+    fi
+    ;;
+  post)
+    if [ -e "$mark" ]; then
+      rm -f "$mark"
+      rfkill unblock bluetooth
+    fi
+    [ -x "$light" ] && runuser -u "$user" -- "$light" restore >/dev/null 2>&1
+    ;;
+esac
+exit 0

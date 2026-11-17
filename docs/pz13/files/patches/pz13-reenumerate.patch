@@ -1,0 +1,37 @@
+--- ../base/qcom.c	2026-11-15 23:04:24.154463105 -0800
++++ qcom.c	2026-11-15 23:05:08.573351232 -0800
+@@ -633,6 +633,24 @@
+ 	}
+ }
+ 
++/*
++ * ASUS ProArt PZ13: the two WSA8845 amplifiers on the v2.0.0 WSA bus come
++ * back from a clock stop silent (attached but dead, or after a bus clash)
++ * every day or so, until a reboot. Take the same path as v3.1.0: no clock
++ * stop on runtime suspend, soft reset and re-enumeration on runtime resume.
++ *   reenumerate=-1  per board (default)   0  never   1  always
++ */
++static int reenumerate = -1;
++module_param(reenumerate, int, 0644);
++MODULE_PARM_DESC(reenumerate, "Reset and re-enumerate the bus on runtime resume instead of clock stop (-1: per board, 0: off, 1: on)");
++
++static bool swrm_reenumerate_on_resume(void)
++{
++	if (reenumerate >= 0)
++		return reenumerate;
++	return of_machine_is_compatible("asus,proart-pz13-ht5306qa");
++}
++
+ static int qcom_swrm_enumerate(struct sdw_bus *bus)
+ {
+ 	struct qcom_swrm_ctrl *ctrl = to_qcom_sdw(bus);
+@@ -670,7 +688,8 @@
+ 		 * garbage for every register read. Reset the controller and
+ 		 * re-enumerate on runtime resume instead, as at probe.
+ 		 */
+-		ctrl->clock_stop_not_supported = ctrl->version >= SWRM_VERSION_3_1_0;
++		ctrl->clock_stop_not_supported = ctrl->version >= SWRM_VERSION_3_1_0 ||
++						 swrm_reenumerate_on_resume();
+ 		/* Now compare with entries */
+ 		list_for_each_entry_safe(slave, _s, &bus->slaves, node) {
+ 			if (sdw_compare_devid(slave, id) == 0) {

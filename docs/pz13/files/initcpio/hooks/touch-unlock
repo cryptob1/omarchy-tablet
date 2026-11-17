@@ -1,0 +1,97 @@
+#!/usr/bin/ash
+# touch-unlock — ask for the disk password with an on-screen keyboard (unl0kr).
+#
+# Runs BEFORE the stock `encrypt` hook. If it opens the volume, encrypt sees
+# /dev/mapper/<name> and does nothing ("This may happen if third party hooks do
+# the crypt setup"). If anything here goes wrong — unl0kr missing, crashing,
+# cancelled, timed out, three wrong passwords — it simply returns and encrypt
+# asks the way it always has. This hook can therefore never be the reason the
+# machine does not boot.
+#
+# unl0kr takes a hardware keyboard too, so with the keyboard attached you can
+# just type the password and press Enter.
+
+# The panel's power supply (a GPIO-switched regulator) has no user this early:
+# the display driver that claims it only loads once the disk is open. Thirty
+# seconds after power-on the kernel switches every unclaimed regulator off, and
+# the prompt goes black. So while the prompt is up the regulator is taken away
+# from the kernel (unbound; the GPIO stays as the firmware left it, on), and
+# handed back before the boot goes on, so the display driver finds it.
+PANEL_SUPPLY=regulator-edp-3p3
+FIXED_REGULATORS=/sys/bus/platform/drivers/reg-fixed-voltage
+panel_supply_held=
+
+hold_panel_power() {
+    [ -e "${FIXED_REGULATORS}/${PANEL_SUPPLY}" ] || return 0
+    echo "${PANEL_SUPPLY}" > "${FIXED_REGULATORS}/unbind" 2>/dev/null && panel_supply_held=1
+    return 0
+}
+
+restore_panel_power() {
+    local n=0
+    [ -n "${panel_supply_held}" ] || return 0
+    # Without this the display never comes up, so try more than once.
+    while [ "${n}" -lt 5 ] && ! [ -e "${FIXED_REGULATORS}/${PANEL_SUPPLY}" ]; do
+        echo "${PANEL_SUPPLY}" > "${FIXED_REGULATORS}/bind" 2>/dev/null
+        [ -e "${FIXED_REGULATORS}/${PANEL_SUPPLY}" ] || sleep 0.2
+        n=$((n + 1))
+    done
+    panel_supply_held=
+    return 0
+}
+
+run_hook() {
+    local cryptdev cryptname cryptoptions cryptopt cryptargs resolved pass tries OLDIFS
+
+    [ -x /usr/bin/unl0kr ] || return 0
+    [ -n "${cryptdevice}" ] || return 0
+    # shellcheck disable=SC2162
+    IFS=: read cryptdev cryptname cryptoptions <<EOF
+$cryptdevice
+EOF
+    [ -n "${cryptname}" ] || return 0
+    [ -b "/dev/mapper/${cryptname}" ] && return 0
+
+    modprobe -a -q dm-crypt >/dev/null 2>&1
+    resolved=$(resolve_device "${cryptdev}" "$(getarg rootdelay)") || return 0
+    cryptsetup isLuks "${resolved}" >/dev/null 2>&1 || return 0
+
+    # The same options the encrypt hook understands.
+    cryptargs=""
+    set -f
+    OLDIFS="$IFS"; IFS=,
+    for cryptopt in ${cryptoptions}; do
+        case ${cryptopt} in
+            allow-discards|discard) cryptargs="${cryptargs} --allow-discards" ;;
+            no-read-workqueue|perf-no_read_workqueue) cryptargs="${cryptargs} --perf-no_read_workqueue" ;;
+            no-write-workqueue|perf-no_write_workqueue) cryptargs="${cryptargs} --perf-no_write_workqueue" ;;
+            sector-size=*) cryptargs="${cryptargs} --sector-size ${cryptopt#*=}" ;;
+        esac
+    done
+    set +f
+    IFS="$OLDIFS"
+
+    # The boot splash must let go of the screen while unl0kr draws on it.
+    if command -v plymouth >/dev/null 2>&1 && plymouth --ping 2>/dev/null; then
+        plymouth deactivate 2>/dev/null
+    fi
+
+    hold_panel_power
+    tries=0
+    while [ "${tries}" -lt 3 ] && ! [ -b "/dev/mapper/${cryptname}" ]; do
+        tries=$((tries + 1))
+        # Five minutes with no password: give up and fall back.
+        pass=$(timeout 300 unl0kr -n -m "Disk password" 2>/dev/null) || break
+        [ -n "${pass}" ] || break
+        # shellcheck disable=SC2086
+        printf '%s' "${pass}" | cryptsetup open --type luks --key-file=- ${cryptargs} "${resolved}" "${cryptname}" >/dev/null 2>&1
+        export CRYPTTAB_TRIED=${tries}
+    done
+    unset pass
+    restore_panel_power
+
+    if command -v plymouth >/dev/null 2>&1 && plymouth --ping 2>/dev/null; then
+        plymouth reactivate 2>/dev/null
+    fi
+    return 0
+}
