@@ -746,6 +746,13 @@ Item {
   // `tablet-mode sounds on|off`: a soft tap as a button goes down.
   property string soundsPref: "off"
   property var tapSound: null
+  property var warmSound: null
+  readonly property bool warmWanted: soundsPref.trim() === "on" && noKeyboard && awake
+  onWarmWantedChanged: keepWarm()
+  function keepWarm() {
+    if (!warmSound) return
+    if (warmWanted) { if (!warmSound.playing) warmSound.play() } else warmSound.stop()
+  }
   readonly property string tapFile: home + "/.local/share/omarchy-tablet/tap.wav"
   // QtMultimedia plays it with no start-up lag; it is optional in Qt, so it is
   // loaded at run time and pw-play stands in where it is missing.
@@ -756,6 +763,15 @@ Item {
     try {
       tapSound = Qt.createQmlObject('import QtMultimedia; SoundEffect { volume: 0.35 }', root, "tapSound")
       tapSound.source = "file://" + tapFile
+      // KEPT WARM. The sound system puts the speakers to sleep a few seconds
+      // after the last sound, and waking them takes long enough that a tap's
+      // click arrived well after the tap. So while the screen is in use (a
+      // touch in the last half minute) a silent loop keeps the output open,
+      // and the click is heard as the finger lands. Over Bluetooth there is
+      // still the headphones' own delay, which nothing here can remove.
+      warmSound = Qt.createQmlObject('import QtMultimedia; SoundEffect { volume: 1.0; loops: SoundEffect.Infinite }', root, "warmSound")
+      warmSound.source = "file://" + home + "/.local/share/omarchy-tablet/warm.wav"
+      keepWarm()
     } catch (e) { tapSound = null }
   }
   function click() {

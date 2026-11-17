@@ -15,7 +15,7 @@ done
 "$HOME/.local/bin/tablet-mode" bar-room off 2>/dev/null || true
 for b in tablet-gestures tablet-touch tablet-osk tablet-mode tablet-power tablet-pin; do rm -f "$HOME/.local/bin/$b"; done
 rm -f "$HOME/.config/hypr/omarchy-tablet.lua" "$HOME/.config/hypr/omarchy-tablet-rotation.lua"
-rm -f "$HOME/.local/share/omarchy-tablet/tap.wav"; rmdir "$HOME/.local/share/omarchy-tablet" 2>/dev/null || true
+rm -f "$HOME/.local/share/omarchy-tablet/tap.wav" "$HOME/.local/share/omarchy-tablet/warm.wav"; rmdir "$HOME/.local/share/omarchy-tablet" 2>/dev/null || true
 conf="$HOME/.config/hypr/hyprland.lua"
 [ -f "$conf" ] && sed -i '/omarchy-tablet (https:\/\/github.com\/cryptob1\/omarchy-tablet)/d; /require("hypr.omarchy-tablet")/d' "$conf"
 gconf="$HOME/.config/ghostty/config"
