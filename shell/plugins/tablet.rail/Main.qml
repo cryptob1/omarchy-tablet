@@ -304,7 +304,7 @@ Item {
   // `tablet-mode topbar hide|show`: this, or the bar always there.
   property string topbarPref: "hide"
   property bool barPeek: false
-  readonly property bool barTucked: pagerOn && topbarPref.trim() !== "show" && !barPeek
+  readonly property bool barTucked: barSkinned && topbarPref.trim() !== "show" && !barPeek
   readonly property int topSize: barTucked ? 12 : Style.bar.sizeHorizontal
   onBarTuckedChanged: tuckBar()
   function tuckBar() { Quickshell.execDetached(["omarchy-toggle-bar", barTucked ? "on" : "off"]) }
@@ -593,7 +593,7 @@ Item {
   property bool todayOpen: false
   property var now: new Date()
   property int monthShift: 0                       // months from this one, in the grid
-  Timer { interval: 20000; repeat: true; running: root.todayOpen || root.pagerOn; triggeredOnStart: true; onTriggered: root.now = new Date() }
+  Timer { interval: 20000; repeat: true; running: root.todayOpen || root.barSkinned; triggeredOnStart: true; onTriggered: root.now = new Date() }
   onTodayOpenChanged: monthShift = 0
   // A rim skin keeps its coloured edge. Otherwise the edge is a thin dark seam:
   // the frame is shaded to fall away into the screen, and a pale line there (as
@@ -2973,26 +2973,21 @@ Item {
               onTapped: root.run([root.home + "/.local/bin/tablet-touch", "next-window"])
             }
           }
+          // The desktop's number and the time; tap for Omarchy's top bar, which
+          // is tucked away upright as it is in landscape (see THE TOP BAR,
+          // TUCKED AWAY). Upright there is no bottom band to hold a clock key.
           Item {
             Layout.fillWidth: true; Layout.fillHeight: true
             implicitWidth: 50; implicitHeight: 54
-            Rectangle {
+            KeyCap {
               anchors.centerIn: parent
-              implicitWidth: 30; implicitHeight: 22
-              radius: 22 * root.corner
-              // On a skin the number sits on a chip of cap colour: a bare number
-              // is lost on a patterned shell.
-              color: root.skin ? root.skin.cap : "transparent"
-              border.width: root.skin ? 1 : 0
-              border.color: Qt.alpha("black", 0.5)
-              Text {
-                anchors.centerIn: parent
-                text: Hyprland.focusedWorkspace !== null ? Hyprland.focusedWorkspace.id : ""
-                color: root.skin ? root.skin.legend : Color.popups.text
-                opacity: root.skin ? 1.0 : 0.75
-                font.pixelSize: root.skin ? 14 : 17
-                font.bold: true
-              }
+              skin: root.skin
+              corner: root.corner
+              pad: 14
+              label: root.deskNow + "  " + Qt.formatTime(root.now, "HH:mm")
+              lit: root.barPeek
+              onPressedDown: root.click()
+              onHit: if (root.topbarPref.trim() !== "show") root.barPeek = !root.barPeek
             }
           }
           Item {
