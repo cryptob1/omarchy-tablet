@@ -166,7 +166,7 @@ sudo tablet-pin confirm      # keep it; without this, install undoes itself afte
 
 `sudo tablet-pin uninstall` takes it out; `tablet-pin clear` forgets the PIN. What it is and is not worth is written at the top of `bin/tablet-pin`: it defends against a person holding the tablet, not against a program already running as you.
 
-**Load.** Three meters in the bottom bezel: processor, memory and battery, each with its percentage. Processor and memory turn the look's warning colour above 85%, the battery below 15%. With the key strip up they shrink to small plates at its ends.
+**Load.** Five small gauges at the right end of the bottom band, each with its figure and a lit bar: processor, memory, disk (how full the root filesystem is), battery, and the watts going out of (or into) the battery. Processor and memory turn the look's warning colour above 85%, the disk above 90%, the battery below 15%.
 
 **Button sounds.** `tablet-mode sounds on` (or the settings panel) plays a soft tap as a button goes down. Off by default. The mic never makes one: it would be the first thing your dictation hears.
 

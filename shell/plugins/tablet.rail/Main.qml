@@ -937,15 +937,16 @@ Item {
   property real batLevel: -1                       // 0-1, or -1 with no battery
   property bool batCharging: false
   property real batWatts: -1                       // into or out of the battery; -1 unknown
-  readonly property int meterW: 52
-  readonly property int meterSpan: 4 * meterW + 3 * 6
+  property real diskUsed: -1                       // of the root filesystem, 0-1
+  readonly property int meterW: 46
+  readonly property int meterSpan: 5 * meterW + 4 * 6
   readonly property real loadHot: 0.85
   Process {
     id: loadProbe
     // The battery, too: the first power supply that is a battery and is the
     // machine's own (a stylus or a mouse reports one as well). Some report a
     // percentage, some only how much energy or charge is left of how much.
-    command: ["sh", "-c", "omarchy-system-stats; for d in /sys/class/power_supply/*; do [ \"$(cat $d/type 2>/dev/null)\" = Battery ] || continue; [ \"$(cat $d/scope 2>/dev/null)\" = Device ] && continue; if [ -r $d/capacity ]; then c=$(cat $d/capacity); else n=$(cat $d/energy_now 2>/dev/null || cat $d/charge_now 2>/dev/null); f=$(cat $d/energy_full 2>/dev/null || cat $d/charge_full 2>/dev/null); [ -n \"$n\" ] && [ \"${f:-0}\" -gt 0 ] && c=$((n * 100 / f)); fi; [ -n \"$c\" ] && echo \"battery $c $(cat $d/status 2>/dev/null) $(cat $d/power_now 2>/dev/null)\"; break; done"]
+    command: ["sh", "-c", "omarchy-system-stats; echo \"disk $(df --output=pcent / 2>/dev/null | tail -1 | tr -dc 0-9)\"; for d in /sys/class/power_supply/*; do [ \"$(cat $d/type 2>/dev/null)\" = Battery ] || continue; [ \"$(cat $d/scope 2>/dev/null)\" = Device ] && continue; if [ -r $d/capacity ]; then c=$(cat $d/capacity); else n=$(cat $d/energy_now 2>/dev/null || cat $d/charge_now 2>/dev/null); f=$(cat $d/energy_full 2>/dev/null || cat $d/charge_full 2>/dev/null); [ -n \"$n\" ] && [ \"${f:-0}\" -gt 0 ] && c=$((n * 100 / f)); fi; [ -n \"$c\" ] && echo \"battery $c $(cat $d/status 2>/dev/null) $(cat $d/power_now 2>/dev/null)\"; break; done"]
     stdout: SplitParser {
       onRead: (line) => {
         var text = String(line), m
@@ -955,6 +956,7 @@ Item {
           root.batCharging = m[2] === "Charging" || m[2] === "Full"
           return
         }
+        if ((m = text.match(/^disk\s+(\d+)/))) { root.diskUsed = Number(m[1]) / 100; return }
         if ((m = text.match(/^cpu\s+([\d.]+)%/))) root.cpuLoad = Number(m[1]) / 100
         else if ((m = text.match(/^memory\s+([\d.]+)\s*\w*\s*\/\s*([\d.]+)/))) root.memLoad = Number(m[2]) > 0 ? Number(m[1]) / Number(m[2]) : -1
       }
@@ -3272,7 +3274,7 @@ Item {
           required property int index
           skin: root.skin
           corner: root.corner
-          wide: 38
+          wide: 34
           label: index + 1
           labelSize: 14
           lit: root.deskNow === index + 1
@@ -3307,7 +3309,7 @@ Item {
       width: root.meterSpan + 6; height: root.bezel
       onPressed: function(mouse) {
         root.click()
-        root.run(["omarchy-shell", "-q", mouse.x > 2 * (root.meterW + 6) ? "omarchy.power" : "omarchy.monitor", "toggle"])
+        root.run(["omarchy-shell", "-q", mouse.x > 3 * (root.meterW + 6) ? "omarchy.power" : "omarchy.monitor", "toggle"])
       }
     }
     // Wi-Fi and Bluetooth: Omarchy's own panels, which open without its bar.
@@ -3361,16 +3363,18 @@ Item {
     // out of (or into) the battery. Each is a small gauge set into the band
     // like the keys: what it is, how much, and a lit bar along its foot.
     Repeater {
-      model: 4
+      model: 5
       Rectangle {
         id: meter
-        required property int index
-        readonly property real load: index === 0 ? root.cpuLoad : (index === 1 ? root.memLoad
-                                     : (index === 2 ? root.batLevel : (root.batWatts < 0 ? -1 : Math.min(1, root.batWatts / 20))))
-        // Processor and memory are a warning when high, the battery when low,
-        // the draw when it would empty the battery in a couple of hours.
-        readonly property bool hot: index === 2 ? (load < 0.15 && !root.batCharging)
-                                    : (index === 3 ? (!root.batCharging && root.batWatts >= 18) : load >= root.loadHot)
+        required property int index     // 0 processor, 1 memory, 2 disk, 3 battery, 4 watts
+        readonly property real load: index === 0 ? root.cpuLoad : (index === 1 ? root.memLoad : (index === 2 ? root.diskUsed
+                                     : (index === 3 ? root.batLevel : (root.batWatts < 0 ? -1 : Math.min(1, root.batWatts / 20)))))
+        // Processor and memory are a warning when high, the disk when nearly
+        // full, the battery when low, the draw when it would empty the
+        // battery in a couple of hours.
+        readonly property bool hot: index === 3 ? (load < 0.15 && !root.batCharging)
+                                    : (index === 4 ? (!root.batCharging && root.batWatts >= 18)
+                                    : (index === 2 ? load >= 0.9 : load >= root.loadHot))
         readonly property color lit: hot ? (root.skin ? root.skin.close : Color.urgent)
                                          : (root.skin ? root.skin.accent : Color.accent)
         readonly property color ink: root.skin ? root.skin.legend : Color.popups.text
@@ -3384,8 +3388,8 @@ Item {
         border.color: Qt.alpha("white", 0.16)
         Text {
           anchors { horizontalCenter: parent.horizontalCenter; top: parent.top; topMargin: 3 }
-          text: meter.index === 0 ? "CPU" : (meter.index === 1 ? "MEM"
-                : (meter.index === 2 ? (root.batCharging ? "CHARGE" : "BATT") : (root.batCharging ? "IN" : "DRAW")))
+          text: meter.index === 0 ? "CPU" : (meter.index === 1 ? "MEM" : (meter.index === 2 ? "DISK"
+                : (meter.index === 3 ? (root.batCharging ? "CHRG" : "BATT") : (root.batCharging ? "IN" : "DRAW"))))
           color: Qt.alpha("white", 0.62)
           font.pixelSize: 7
           font.bold: true
@@ -3393,7 +3397,7 @@ Item {
         }
         Text {
           anchors { horizontalCenter: parent.horizontalCenter; top: parent.top; topMargin: 10 }
-          text: meter.index === 3 ? root.batWatts.toFixed(root.batWatts < 10 ? 1 : 0) + "W"
+          text: meter.index === 4 ? root.batWatts.toFixed(root.batWatts < 10 ? 1 : 0) + "W"
                                   : Math.round(Math.max(0, meter.load) * 100) + "%"
           color: meter.hot ? meter.lit : "#f1f3f6"
           font.pixelSize: 12
