@@ -2696,6 +2696,21 @@ Item {
           onWheel: (notches) => Quickshell.execDetached(["ydotool", "mousemove", "--wheel", "-x", "0", "-y", String(-notches)])
         }
 
+        // Next desktop (hold: take the window along), level with "previous" on
+        // the left rail. The numbered keys in the bottom band go straight to a
+        // desktop; these two are for stepping, under the thumbs.
+        TouchButton {
+          skin: root.skin
+          corner: root.corner
+          onPressedDown: root.click()
+          Layout.alignment: Qt.AlignCenter
+          glyph: "󰁔"
+          heldGlyph: "󰖯"
+          holdMs: root.carryMs
+          onTapped: root.wsTapped("r+1")
+          onHeld: root.wsHeld("r+1")
+        }
+
         MicButton {
           skin: root.skin
           corner: root.corner
@@ -2754,25 +2769,12 @@ Item {
 
           onPressedDown: root.click()
           Layout.alignment: Qt.AlignCenter
-          visible: !root.dual && !root.pagerOn     // two rails: this arrow is on the left one
+          visible: !root.dual      // two rails: this arrow is on the left one
           glyph: "󰁍"
           heldGlyph: "󰖯"
           holdMs: root.carryMs
           onTapped: root.wsTapped("r-1")
           onHeld: root.wsHeld("r-1")
-        }
-
-        TouchButton {
-          skin: root.skin
-          corner: root.corner
-          onPressedDown: root.click()
-          Layout.alignment: Qt.AlignCenter
-          glyph: "󰁔"
-          heldGlyph: "󰖯"
-          visible: !root.pagerOn
-          holdMs: root.carryMs
-          onTapped: root.wsTapped("r+1")
-          onHeld: root.wsHeld("r+1")
         }
 
         TouchButton {
@@ -3030,6 +3032,19 @@ Item {
           onMiddle: root.run(["omarchy-audio-output-volume", "mute-toggle"])
         }
 
+        // Previous desktop (hold: take the window along), level with "next".
+        TouchButton {
+          skin: root.skin
+          corner: root.corner
+          onPressedDown: root.click()
+          Layout.alignment: Qt.AlignCenter
+          glyph: "󰁍"
+          heldGlyph: "󰖯"
+          holdMs: root.carryMs
+          onTapped: root.wsTapped("r-1")
+          onHeld: root.wsHeld("r-1")
+        }
+
         // Under the left thumb, top to bottom: play, then the two window buttons
         // together (fill the screen, next window), then Back and the app drawer
         // lowest, where Android has them.
@@ -3093,18 +3108,6 @@ Item {
           onHeld: { root.drawerOpen = false; root.run(["omarchy-menu", "toggle", "apps"]) }
         }
 
-        TouchButton {
-          skin: root.skin
-          corner: root.corner
-          onPressedDown: root.click()
-          Layout.alignment: Qt.AlignCenter
-          visible: !root.pagerOn
-          glyph: "󰁍"
-          heldGlyph: "󰖯"
-          holdMs: root.carryMs
-          onTapped: root.wsTapped("r-1")
-          onHeld: root.wsHeld("r-1")
-        }
       }
     }
   }

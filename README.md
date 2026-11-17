@@ -57,7 +57,7 @@ Every button's touch target is bigger than the button you see: it reaches out to
 
 The order is set by how a tablet of this size is held. It has weight, so you grip it low on each side with your palms under the corners, and your thumbs rest about two thirds of the way down the screen. From there a thumb reaches up easily, down with a curl, and the top third not at all without letting go. So the things you use constantly are where the thumbs rest, the things you hold or drag are in easy reach, the corners get what you use least, and what you must not hit by accident is at the top. The lower rows of the two rails line up.
 
-The left thumb moves you around (windows, back, apps, media); the right thumb puts things in (scroll, speak, Enter, paste, type). Desktops are in the bottom band (see The pager) while it is up; upright or on the plain look, a previous and a next arrow return to the rails.
+The left thumb moves you around (windows, back, apps, media); the right thumb puts things in (scroll, speak, Enter, paste, type). The numbered keys in the bottom band (see The pager) go straight to a desktop; the two arrows on the rails step to the next or the previous one.
 
 **Right rail**, top to bottom:
 
@@ -65,6 +65,7 @@ The left thumb moves you around (windows, back, apps, media); the right thumb pu
 |---|---|
 | Close | Closes the focused window. Asks first: one tap arms it ("Close?"), a second tap within 3 s closes. At the top, out of the thumb's way. |
 | Scroll strip | Drag along it to scroll the focused window, like a mouse wheel: down moves further down the page. Let go while moving and it keeps going. With an Omarchy picker open, it scrolls that instead. |
+| › | Next desktop, level with "previous" on the left rail. Hold to take the focused window along. |
 | Mic | Push-to-talk dictation, using Omarchy's default dictation backend (see [Dictation](#dictation)). Where the thumb rests, because you hold it while you speak. |
 | Command | Hold and say what you want done: "open the browser", "next tab", "what's the battery at", "remind me to...". It is handed to the voice assistant as a command, never typed, and the answer is spoken. Shown when there is an assistant to take it: your own `~/.config/tablet-mode/command-press` and `command-release`, else Cortex (`cortex-ctl command-down` / `command-up`). |
 | Enter | Sends Enter to the focused app: sends what you just said. |
@@ -82,6 +83,7 @@ The left thumb moves you around (windows, back, apps, media); the right thumb pu
 | Today | The time and date large enough to read at arm's length, the battery, and a month calendar. |
 | Brightness | A rocker: plus at the top, minus at the bottom, hold to keep going. It fills from the bottom to show the current level. |
 | Volume | The same rocker for volume; tap the speaker in the middle to mute. Uses Omarchy's own commands, so its on-screen display shows too. |
+| ‹ | Previous desktop. Hold to take the focused window along. |
 | Play / pause | Hold for the next track. |
 | Maximise | Fills the screen with the focused window, or restores it. The rails stay. Next to Switch: the two window buttons are together. |
 | Switch | Focuses the next window on the workspace. If the current one fills the screen, the next takes its place. |
@@ -143,7 +145,7 @@ Choose one in the settings panel (the cog at the top of the left rail), or with 
 
 It appears with those apps and goes away with others (`tablet-mode keys auto`, the default); `always` keeps it up everywhere, `off` never shows it. It takes 36 px of height while it is up.
 
-**The pager.** The desktops are numbered keys at the left end of the bottom band: tap one to go there, hold one to take the focused window there. The one you are on is lit and empty ones are faint. While the band is up the rails carry no desktop arrows, so the only arrow left on them is Back. (Upright, or on the plain look, there is no band and the arrows return.)
+**The pager.** The desktops are numbered keys at the left end of the bottom band: tap one to go there, hold one to take the focused window there. The one you are on is lit and empty ones are faint. The rails keep a previous and a next arrow as well, for stepping without looking.
 
 **The top bar, tucked away.** With the desktops, the battery and the time in the bottom band, Omarchy's bar has little left to say on a tablet, so while the band is up it is hidden and its height goes back to the windows. The clock key in the band brings it back for half a minute (or until you tap the clock again) for Wi-Fi, Bluetooth, sound and the tray. `tablet-mode topbar show` keeps it there always; it returns by itself when a keyboard is attached.
 
