@@ -570,7 +570,7 @@ Item {
     run([home + "/.local/bin/tablet-osk", "hide"])
     run([home + "/.local/bin/tablet-mode", "keyboard", v])
   }
-  onNoKeyboardChanged: if (!noKeyboard) kbOpen = false        // the real keyboard is back
+  onNoKeyboardChanged: { if (!noKeyboard) kbOpen = false; roomForPanels() }   // the real keyboard is back (or gone)
   FileView {
     path: root.stateDir + "/lock-keyboard"
     watchChanges: true
@@ -602,6 +602,10 @@ Item {
   readonly property int frameEdgeWidth: skin && skin.rim ? 3 : 1
   readonly property string barWanted: barSkinned ? "on" : ""
   onBarWantedChanged: applyBar()
+  // While the rails are up, the bar's right-hand icons are moved in from the
+  // edge so that the panels hanging under them clear the right rail
+  // (`tablet-mode bar-room`, which says why).
+  function roomForPanels() { Quickshell.execDetached([home + "/.local/bin/tablet-mode", "bar-room", noKeyboard ? "on" : "off"]) }
   function applyBar() {
     Quickshell.execDetached([home + "/.local/bin/tablet-mode", "bar-colors", barWanted.length > 0 ? barWanted : "clear"])
   }
@@ -748,6 +752,7 @@ Item {
   Component.onCompleted: {
     applyBar()
     tuckBar()
+    roomForPanels()
     try {
       tapSound = Qt.createQmlObject('import QtMultimedia; SoundEffect { volume: 0.35 }', root, "tapSound")
       tapSound.source = "file://" + tapFile

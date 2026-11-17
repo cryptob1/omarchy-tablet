@@ -21,5 +21,7 @@ hyprctl reload >/dev/null 2>&1 || true
 omarchy restart shell >/dev/null 2>&1 || true
 echo "[omarchy-tablet] removed. State and config are kept in ~/.local/state/tablet-mode and ~/.config/tablet-mode."
 
+# The spacer that keeps Omarchy's panels clear of the right rail: take it out.
+"$HOME/.local/bin/tablet-mode" bar-room off 2>/dev/null || true
 # The top bar may be tucked away (shell plugin tablet.rail): bring it back.
 command -v omarchy-toggle-bar >/dev/null 2>&1 && omarchy-toggle-bar off >/dev/null 2>&1 || true

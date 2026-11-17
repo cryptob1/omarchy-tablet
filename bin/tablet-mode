@@ -275,6 +275,44 @@ def bar_mode(skinned):
         pass
 
 
+BAR_ROOM = 250          # px: the rail's width plus half of the widest panel card
+SHELL_JSON = os.path.expanduser("~/.config/omarchy/shell.json")
+
+
+def bar_room(on):
+    """Keep Omarchy's panels out from under the right rail.
+
+    A panel's card (battery, Wi-Fi, system monitor...) hangs centred under its
+    icon in the bar, and those icons are at the bar's right end: the card came
+    up against the screen's right edge, half hidden by the rail. Putting the
+    rail under the panels instead is no answer, because a panel closes at any
+    touch outside its card and the rail's scroll strip is then a touch outside.
+
+    So the icons are moved in from the edge: a blank spacer widget is added at
+    the right end of the bar (marked "tabletRoom", so only ours is ever
+    removed), wide enough that the last icon's card clears the rail. It is
+    taken out again when the rails go (a keyboard is attached)."""
+    try:
+        with open(SHELL_JSON) as f:
+            conf = json.load(f)
+        right = conf["bar"]["layout"]["right"]
+    except (OSError, ValueError, KeyError, TypeError):
+        return
+    kept = [w for w in right if not (isinstance(w, dict) and w.get("tabletRoom"))]
+    want = kept + ([{"id": "omarchy.spacer", "size": BAR_ROOM, "tabletRoom": True}] if on else [])
+    if want == right:
+        return
+    conf["bar"]["layout"]["right"] = want
+    tmp = SHELL_JSON + ".tablet-tmp"
+    try:
+        with open(tmp, "w") as f:
+            json.dump(conf, f, indent=2)
+            f.write("\n")
+        os.replace(tmp, SHELL_JSON)
+    except OSError:
+        pass
+
+
 def bar_colors(text):
     """Make Omarchy's bar see-through (a skin's strip is drawn behind it), or
     put it back ("clear"). Edits only its own marked block in the [bar] section
@@ -346,6 +384,8 @@ def main():
         write(os.path.join(STATE_DIR, "sounds"), cmd[1])
     elif cmd[0] == "bar-colors" and len(cmd) == 2:
         bar_colors(cmd[1])                 # run by the rail plugin, not by hand
+    elif cmd[0] == "bar-room" and len(cmd) == 2 and cmd[1] in ("on", "off"):
+        bar_room(cmd[1] == "on")           # likewise
     elif cmd[0] == "rotate" and len(cmd) == 2:
         rotate(cmd[1])
     elif cmd[0] == "dictation" and len(cmd) == 2 and cmd[1] in ("on", "off"):
