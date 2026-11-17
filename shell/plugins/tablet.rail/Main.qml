@@ -390,7 +390,7 @@ Item {
     exclusiveZone: root.slide > 0 ? root.railSize + root.edgeGap : 0
     anchors { right: true; bottom: true; top: !rail.upright; left: rail.upright }
     implicitWidth: root.railSize + root.edgeGap
-    implicitHeight: root.railSize + root.edgeGap
+    implicitHeight: (root.upright ? root.uprightBar : root.railSize) + root.edgeGap
     mask: Region {}
   }
   PanelWindow {
@@ -403,7 +403,7 @@ Item {
     exclusiveZone: root.slide > 0 ? root.railSize + root.edgeGap : 0
     anchors { left: true; top: true; bottom: true }
     implicitWidth: root.railSize + root.edgeGap
-    implicitHeight: root.railSize + root.edgeGap
+    implicitHeight: (root.upright ? root.uprightBar : root.railSize) + root.edgeGap
     mask: Region {}
   }
 
@@ -605,7 +605,8 @@ Item {
   // While the rails are up, the bar's right-hand icons are moved in from the
   // edge so that the panels hanging under them clear the right rail
   // (`tablet-mode bar-room`, which says why).
-  function roomForPanels() { Quickshell.execDetached([home + "/.local/bin/tablet-mode", "bar-room", noKeyboard ? "on" : "off"]) }
+  function roomForPanels() { Quickshell.execDetached([home + "/.local/bin/tablet-mode", "bar-room", noKeyboard && !upright ? "on" : "off"]) }
+  onUprightChanged: roomForPanels()            // upright there is no rail on the right to clear
   function applyBar() {
     Quickshell.execDetached([home + "/.local/bin/tablet-mode", "bar-colors", barWanted.length > 0 ? barWanted : "clear"])
   }
@@ -2326,7 +2327,7 @@ Item {
               // on, everything painted afterwards, the band's shading included,
               // was confined to that little box.
               var hx = P(mid, span4 * 0.2)
-              var sw = lw4 ? 26 : span4 * 0.6, sh = lw4 ? span4 * 0.6 : 9, lean = Math.min(6, sh * 0.6)
+              var sw = lw4 ? 26 : span4 * 0.6, sh = lw4 ? Math.min(12, span4 * 0.6) : 9, lean = Math.min(6, sh * 0.6)   // a low chevron band, whatever the piece
               for (k = 0; k * 7 + 7 + lean <= sw; k++) {
                 c.globalAlpha = 0.85; c.fillStyle = k % 2 ? "#f2c200" : "#16181c"
                 c.beginPath()
@@ -2457,6 +2458,7 @@ Item {
 
   // ---------------------------------------------------------------- the rail
   readonly property int railSize: 64
+  readonly property int uprightBar: 132      // the bar along the bottom of an upright screen: two rows
   // Two rails when asked for and the screen is wide; upright, one bar.
   readonly property bool upright: Quickshell.screens.length > 0
     && Quickshell.screens[0].height > Quickshell.screens[0].width
@@ -2501,7 +2503,7 @@ Item {
     // which lies over the windows and passes touches through (the mask).
     readonly property int over: root.shaped ? root.overhang : 0
     implicitWidth: root.railSize + root.edgeGap + over
-    implicitHeight: root.railSize + root.edgeGap
+    implicitHeight: (root.upright ? root.uprightBar : root.railSize) + root.edgeGap
     mask: Region { item: railCard }
 
     ShellPattern {       // the shaped rail: shell, pattern and shading in one outline
@@ -2596,6 +2598,7 @@ Item {
       }
 
       GridLayout {
+        visible: !rail.upright
         anchors.fill: parent
         anchors.margins: 7
         flow: rail.upright ? GridLayout.LeftToRight : GridLayout.TopToBottom
@@ -2846,6 +2849,290 @@ Item {
           onTapped: root.run([root.home + "/.local/bin/tablet-touch", "next-window"])
         }
       }
+
+      // UPRIGHT. One row along the bottom could not hold sixteen controls in 900
+      // px: they were crushed together and the scroll strip squeezed to nothing.
+      // Upright the bar is two rows, laid out for a tablet held by its lower
+      // corners: the left thumb's row ends are previous / back / apps, the
+      // right thumb's are enter / command / mic / next; the scroll strip stands
+      // in the middle, the height of both rows; what is wanted less often
+      // (power, rotate, stay awake, close, window buttons, keyboard) is above.
+      GridLayout {
+        visible: rail.upright
+        anchors.fill: parent
+        anchors.margins: 7
+        columns: 9
+        rowSpacing: 6
+        columnSpacing: 4
+          Item {
+            Layout.fillWidth: true; Layout.fillHeight: true
+            implicitWidth: 50; implicitHeight: 54
+            TouchButton {
+              anchors.centerIn: parent
+              skin: root.skin
+              corner: root.corner
+              onPressedDown: root.click()
+              glyph: "󰐥"
+              danger: true
+              active: root.powerOpen
+              activeColor: Color.urgent
+              onTapped: root.powerOpen = !root.powerOpen
+            }
+          }
+          Item {
+            Layout.fillWidth: true; Layout.fillHeight: true
+            implicitWidth: 50; implicitHeight: 54
+            TouchButton {
+              anchors.centerIn: parent
+              skin: root.skin
+              corner: root.corner
+              onPressedDown: root.click()
+              glyph: "󰑨"
+              active: root.rotationPref.trim() === "auto"
+              holdMs: 600
+              onTapped: root.setRotation(root.upright ? "landscape" : "portrait")
+              onHeld: root.run([root.home + "/.local/bin/tablet-mode", "rotate", "flip"])
+            }
+          }
+          Item {
+            Layout.fillWidth: true; Layout.fillHeight: true
+            implicitWidth: 50; implicitHeight: 54
+            TouchButton {
+              anchors.centerIn: parent
+              skin: root.skin
+              corner: root.corner
+              onPressedDown: root.click()
+              glyph: root.stayAwake ? "󰅶" : "󰛊"
+              active: root.stayAwake
+              onTapped: root.toggleStayAwake()
+              holdMs: 600
+              heldGlyph: "󰒓"
+              onHeld: root.settingsOpen = true
+            }
+          }
+          Item {
+            Layout.fillWidth: true; Layout.fillHeight: true
+            implicitWidth: 50; implicitHeight: 54
+            TouchButton {
+              anchors.centerIn: parent
+
+              skin: root.skin
+              corner: root.corner
+
+              onPressedDown: root.click()
+              glyph: root.closeArmed ? "Close?" : "󰅖"
+              danger: true
+              glyphSize: root.closeArmed ? 12 : 24
+              boldGlyph: root.closeArmed
+              active: root.closeArmed
+              activeColor: Color.urgent
+              onTapped: root.closeTapped()
+            }
+          }
+          Item {
+            Layout.rowSpan: 2; Layout.fillWidth: true; Layout.fillHeight: true
+            implicitWidth: 50
+            ScrollStrip {
+              anchors { top: parent.top; bottom: parent.bottom; horizontalCenter: parent.horizontalCenter }
+
+              skin: root.skin
+              corner: root.corner
+              onAim: root.run([root.home + "/.local/bin/tablet-touch", "scroll-aim"])
+              // It is drawn as a wheel, so it turns like one: roll it DOWN and the
+              // page scrolls down (the text moves up). The reverse of a finger on
+              // the content itself, which drags the text with it; on a wheel that
+              // felt backwards.
+              onWheel: (notches) => Quickshell.execDetached(["ydotool", "mousemove", "--wheel", "-x", "0", "-y", String(-notches)])
+            }
+          }
+          Item {
+            Layout.fillWidth: true; Layout.fillHeight: true
+            implicitWidth: 50; implicitHeight: 54
+            TouchButton {
+              anchors.centerIn: parent
+
+              skin: root.skin
+              corner: root.corner
+
+              onPressedDown: root.click()
+              glyph: "󰊓"
+              onTapped: root.toggleMaximise()
+            }
+          }
+          Item {
+            Layout.fillWidth: true; Layout.fillHeight: true
+            implicitWidth: 50; implicitHeight: 54
+            TouchButton {
+              anchors.centerIn: parent
+
+              skin: root.skin
+              corner: root.corner
+
+              onPressedDown: root.click()
+              glyph: "󰓡"
+              onTapped: root.run([root.home + "/.local/bin/tablet-touch", "next-window"])
+            }
+          }
+          Item {
+            Layout.fillWidth: true; Layout.fillHeight: true
+            implicitWidth: 50; implicitHeight: 54
+            Rectangle {
+              anchors.centerIn: parent
+              implicitWidth: 30; implicitHeight: 22
+              radius: 22 * root.corner
+              // On a skin the number sits on a chip of cap colour: a bare number
+              // is lost on a patterned shell.
+              color: root.skin ? root.skin.cap : "transparent"
+              border.width: root.skin ? 1 : 0
+              border.color: Qt.alpha("black", 0.5)
+              Text {
+                anchors.centerIn: parent
+                text: Hyprland.focusedWorkspace !== null ? Hyprland.focusedWorkspace.id : ""
+                color: root.skin ? root.skin.legend : Color.popups.text
+                opacity: root.skin ? 1.0 : 0.75
+                font.pixelSize: root.skin ? 14 : 17
+                font.bold: true
+              }
+            }
+          }
+          Item {
+            Layout.fillWidth: true; Layout.fillHeight: true
+            implicitWidth: 50; implicitHeight: 54
+            TouchButton {
+              anchors.centerIn: parent
+
+              skin: root.skin
+              corner: root.corner
+
+              onPressedDown: root.click()
+              glyph: "󰌌"
+              active: root.kbOpen
+              onTapped: root.toggleKeyboard()
+            }
+          }
+          Item {
+            Layout.fillWidth: true; Layout.fillHeight: true
+            implicitWidth: 50; implicitHeight: 54
+            TouchButton {
+              anchors.centerIn: parent
+
+              skin: root.skin
+              corner: root.corner
+
+              onPressedDown: root.click()
+              glyph: "󰁍"
+              heldGlyph: "󰖯"
+              holdMs: root.carryMs
+              onTapped: root.wsTapped("r-1")
+              onHeld: root.wsHeld("r-1")
+            }
+          }
+          Item {
+            Layout.fillWidth: true; Layout.fillHeight: true
+            implicitWidth: 50; implicitHeight: 54
+            TouchButton {
+              anchors.centerIn: parent
+              skin: root.skin
+              corner: root.corner
+              onPressedDown: root.click()
+              glyph: "󰅁"
+              heldGlyph: "󰅂"
+              holdMs: 500
+              onTapped: root.goBack()
+              onHeld: root.goForward()
+            }
+          }
+          Item {
+            Layout.fillWidth: true; Layout.fillHeight: true
+            implicitWidth: 50; implicitHeight: 54
+            TouchButton {
+              anchors.centerIn: parent
+              skin: root.skin
+              corner: root.corner
+              onPressedDown: root.click()
+              glyph: "󰀻"
+              active: root.drawerOpen
+              holdMs: 600
+              onTapped: root.drawerOpen = !root.drawerOpen
+              onHeld: { root.drawerOpen = false; root.run(["omarchy-menu", "toggle", "apps"]) }
+            }
+          }
+          Item {
+            Layout.fillWidth: true; Layout.fillHeight: true
+            implicitWidth: 50; implicitHeight: 54
+            TouchButton {
+              anchors.centerIn: parent
+              skin: root.skin
+              corner: root.corner
+              onPressedDown: root.click()
+              glyph: "󰆒"
+              heldGlyph: "󰆏"
+              holdMs: 500
+              onTapped: root.run([root.home + "/.local/bin/tablet-touch", "paste-here"])
+              onHeld: root.run([root.home + "/.local/bin/tablet-touch", "copy-here"])
+            }
+          }
+          Item {
+            Layout.fillWidth: true; Layout.fillHeight: true
+            implicitWidth: 50; implicitHeight: 54
+            TouchButton {
+              anchors.centerIn: parent
+              skin: root.skin
+              corner: root.corner
+              onPressedDown: root.click()
+              glyph: "󰌑"
+              onTapped: root.run(["ydotool", "key", "28:1", "28:0"])
+            }
+          }
+          Item {
+            Layout.fillWidth: true; Layout.fillHeight: true
+            implicitWidth: 50; implicitHeight: 54
+            MicButton {
+              anchors.centerIn: parent
+              skin: root.skin
+              corner: root.corner
+              visible: root.hasCommand
+              size: 50                      // as tall as the rest (see rowSpacing above)
+              quiet: true
+              glyph: "\udb81\udea9"
+              listening: root.listening && root.commandHeld
+              busy: root.busy && root.commandHeld
+              onDown: root.commandPress()
+              onUp: root.commandRelease()
+            }
+          }
+          Item {
+            Layout.fillWidth: true; Layout.fillHeight: true
+            implicitWidth: 50; implicitHeight: 54
+            MicButton {
+              anchors.centerIn: parent
+              skin: root.skin
+              corner: root.corner
+              visible: root.hasMic
+              size: 50
+              prominent: true
+              listening: root.listening && !root.commandHeld
+              busy: root.busy && !root.commandHeld
+              onDown: root.micPress()
+              onUp: root.micRelease()
+            }
+          }
+          Item {
+            Layout.fillWidth: true; Layout.fillHeight: true
+            implicitWidth: 50; implicitHeight: 54
+            TouchButton {
+              anchors.centerIn: parent
+              skin: root.skin
+              corner: root.corner
+              onPressedDown: root.click()
+              glyph: "󰁔"
+              heldGlyph: "󰖯"
+              holdMs: root.carryMs
+              onTapped: root.wsTapped("r+1")
+              onHeld: root.wsHeld("r+1")
+            }
+          }
+      }
     }
   }
 
@@ -2865,7 +3152,7 @@ Item {
     anchors { left: true; top: true; bottom: true }
     readonly property int over: root.shaped ? root.overhang : 0
     implicitWidth: root.railSize + root.edgeGap + over
-    implicitHeight: root.railSize + root.edgeGap
+    implicitHeight: (root.upright ? root.uprightBar : root.railSize) + root.edgeGap
     mask: Region { item: railLeftCard }
 
     ShellPattern {       // the shaped rail: shell, pattern and shading in one outline
@@ -3882,7 +4169,7 @@ Item {
     // reach (Back closes the drawer, the Apps button toggles it).
     margins {
       top: root.topSize
-      bottom: root.upright ? root.railSize : (root.slide > 0 && root.barSkinned ? root.bezel : 0)
+      bottom: root.upright ? root.uprightBar : (root.slide > 0 && root.barSkinned ? root.bezel : 0)
       left: !root.upright && root.dual && root.slide > 0 ? root.railSize : 0
       right: !root.upright && root.slide > 0 ? root.railSize : 0
     }

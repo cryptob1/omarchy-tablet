@@ -90,7 +90,7 @@ The left thumb moves you around (windows, back, apps, media); the right thumb pu
 | Back | Goes back in the focused app, as on a phone (it sends Alt+Left: back in browsers, file managers and most apps with a history); closes the app drawer or the settings panel if one is open. Hold for forward. Where the left thumb rests. |
 | Apps | Opens the app drawer: every app, big, on nearly the whole screen. Drag or flick to scroll, tap to launch. Hold for Omarchy's own launcher (which has search, and wants a keyboard). Three fingers up opens the drawer too. |
 
-`tablet-mode rails right` puts everything except the media, volume and brightness controls on a single right-hand rail (hold Stay awake there for the settings panel); `tablet-mode rails both` brings the second one back. An upright screen always gets the single rail, along the bottom edge.
+`tablet-mode rails right` puts everything except the media, volume and brightness controls on a single right-hand rail (hold Stay awake there for the settings panel); `tablet-mode rails both` brings the second one back. An upright screen gets one bar along the bottom edge, two rows high: previous, back, apps and paste under the left thumb; enter, command, mic and next under the right; the scroll strip between them, the height of both rows; power, rotate, stay awake, close, the window buttons and the keyboard above.
 
 ### Looks
 
