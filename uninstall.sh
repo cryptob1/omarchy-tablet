@@ -10,6 +10,9 @@ for p in tablet.rail tablet.screenoff; do
   omarchy plugin disable "$p" >/dev/null 2>&1 || true
   rm -rf "$HOME/.config/omarchy/plugins/$p"
 done
+# The spacer that keeps Omarchy's panels clear of the right rail: take it out
+# (before the command that does it is removed).
+"$HOME/.local/bin/tablet-mode" bar-room off 2>/dev/null || true
 for b in tablet-gestures tablet-touch tablet-osk tablet-mode tablet-power tablet-pin; do rm -f "$HOME/.local/bin/$b"; done
 rm -f "$HOME/.config/hypr/omarchy-tablet.lua" "$HOME/.config/hypr/omarchy-tablet-rotation.lua"
 rm -f "$HOME/.local/share/omarchy-tablet/tap.wav"; rmdir "$HOME/.local/share/omarchy-tablet" 2>/dev/null || true
@@ -21,7 +24,5 @@ hyprctl reload >/dev/null 2>&1 || true
 omarchy restart shell >/dev/null 2>&1 || true
 echo "[omarchy-tablet] removed. State and config are kept in ~/.local/state/tablet-mode and ~/.config/tablet-mode."
 
-# The spacer that keeps Omarchy's panels clear of the right rail: take it out.
-"$HOME/.local/bin/tablet-mode" bar-room off 2>/dev/null || true
 # The top bar may be tucked away (shell plugin tablet.rail): bring it back.
 command -v omarchy-toggle-bar >/dev/null 2>&1 && omarchy-toggle-bar off >/dev/null 2>&1 || true
