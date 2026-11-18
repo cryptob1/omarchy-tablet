@@ -4,8 +4,9 @@
     three fingers left / right   next / previous workspace
     three fingers up             app launcher
     three fingers down           next window on this workspace
-    four fingers up              maximise the focused window (the bar stays)
-    four fingers down            restore it
+    four fingers up              maximise the focused window (the bar stays);
+                                 again, and the rails and the band go away too
+    four fingers down            bring the rails back; again, restore the window
     one finger, in a terminal    hold, then drag, selects text;
                                  a drag that starts sideways selects at once
                                  (to scroll, use the scroll strip on the rail)
@@ -399,10 +400,21 @@ def act(direction, fingers=3):
             # Like the touchpad swipe: dragging the desktop left reveals the next one.
             hyprctl("dispatch", f'hl.dsp.focus({{ workspace = "r{"+1" if direction == "left" else "-1"}" }})')
             return
+        # The frame, tucked away: one step past maximised, and the first step
+        # back (the shell reads this file; see TUCKED in the rail plugin).
+        tucked = os.path.join(RUN_DIR, "tucked")
+        if direction == "down" and os.path.exists(tucked):
+            os.remove(tucked)
+            return
         window = json.loads(hyprctl("activewindow", "-j") or "{}")
+        maximised = int(window.get("fullscreen") or 0) != 0
+        if direction == "up" and tablet_mode() and (maximised or not window.get("address")):
+            os.makedirs(RUN_DIR, exist_ok=True)
+            with open(tucked, "w") as f:
+                f.write("1\n")
+            return
         if not window.get("address"):
             return
-        maximised = int(window.get("fullscreen") or 0) != 0
         if (direction == "up") != maximised:      # up when not yet, down when it is
             hyprctl("dispatch", 'hl.dsp.window.fullscreen({ mode = "maximized" })')
     except (OSError, ValueError, subprocess.SubprocessError):

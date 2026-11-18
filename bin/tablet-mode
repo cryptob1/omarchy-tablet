@@ -39,6 +39,8 @@ Reactions:
                                      always, or never
     tablet-mode keyboard split|full  the on-screen keyboard: split under the thumbs
                                      (the default), or full width (wvkbd)
+    tablet-mode size roomy|compact   how much of the screen the frame takes: compact has
+                                     narrower rails, a thinner band and almost no top bezel
     tablet-mode topbar hide|show     Omarchy's top bar: tucked away until the clock key
                                      is tapped (the default), or always there
     tablet-mode sounds on|off        a soft tap as a rail button goes down
@@ -378,6 +380,8 @@ def main():
         write(os.path.join(STATE_DIR, "keys"), cmd[1])
     elif cmd[0] == "keyboard" and len(cmd) == 2 and cmd[1] in ("split", "full"):
         write(os.path.join(STATE_DIR, "keyboard"), cmd[1])
+    elif cmd[0] == "size" and len(cmd) == 2 and cmd[1] in ("roomy", "compact"):
+        write(os.path.join(STATE_DIR, "size"), cmd[1])
     elif cmd[0] == "topbar" and len(cmd) == 2 and cmd[1] in ("hide", "show"):
         write(os.path.join(STATE_DIR, "topbar"), cmd[1])
     elif cmd[0] == "sounds" and len(cmd) == 2 and cmd[1] in ("on", "off"):

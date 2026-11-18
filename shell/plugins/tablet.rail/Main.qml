@@ -266,7 +266,41 @@ Item {
   // U of thick sides and a thin top reads as three strips, a closed ring reads
   // as one object with the screen set into it. It costs the windows this much
   // height; it is as tall as it is to carry the load meters.
-  readonly property int bezel: (keysShown || pagerOn) ? 48 : 12
+  readonly property int bezel: (keysShown || pagerOn) ? (compact ? 38 : 48) : (compact ? 6 : 12)
+
+  // HOW MUCH OF THE SCREEN THE FRAME TAKES. `tablet-mode size roomy|compact`.
+  // Roomy (the default): 64 px rails, a 48 px band, a 12 px top bezel, which
+  // is 19% of a 1440x900 screen. Compact: 52, 38 and 4, which is 13%. The
+  // rail's buttons are drawn at 0.84 of their size (42 px, 8 mm on a 13-inch
+  // screen: still a thumb's target, with less to spare); the band's keys are
+  // the same size, in less margin.
+  property string sizePref: "roomy"
+  readonly property bool compact: sizePref.trim() === "compact"
+  readonly property real railScale: compact ? 0.84 : 1
+  readonly property real railPad: compact ? 5 : 7
+  function setSize(v) { sizePref = v; run([home + "/.local/bin/tablet-mode", "size", v]) }
+  FileView {
+    path: root.stateDir + "/size"
+    watchChanges: true
+    printErrors: false
+    onFileChanged: reload()
+    onLoaded: root.sizePref = text()
+    onLoadFailed: root.sizePref = "roomy"
+  }
+  // TUCKED. Four fingers up on a window that is already maximised (see
+  // bin/tablet-gestures) puts the whole frame away, until four fingers down:
+  // for a film, a long read, a page that wants every pixel. Unlike SLIDE
+  // AWAY, a touch does not bring it back. The keyboard and the sheets do.
+  property bool tucked: false
+  FileView {
+    path: Quickshell.env("XDG_RUNTIME_DIR") + "/tablet-mode/tucked"
+    watchChanges: true
+    printErrors: false
+    onFileChanged: reload()
+    onLoaded: root.tucked = text().trim() === "1"
+    onLoadFailed: root.tucked = false
+  }
+  readonly property bool tuckedNow: tucked && noKeyboard && !settingsOpen && !drawerOpen && !powerOpen && !todayOpen
 
   // THE KEY STRIP. Without a keyboard, the keys an app needs all the time are
   // a whole on-screen keyboard away. So the bottom bezel grows a row of them,
@@ -305,7 +339,7 @@ Item {
   property string topbarPref: "hide"
   property bool barPeek: false
   readonly property bool barTucked: barSkinned && topbarPref.trim() !== "show" && !barPeek
-  readonly property int topSize: barTucked ? 12 : Style.bar.sizeHorizontal
+  readonly property int topSize: barTucked ? (compact ? 4 : 12) : Style.bar.sizeHorizontal
   onBarTuckedChanged: tuckBar()
   function tuckBar() { Quickshell.execDetached(["omarchy-toggle-bar", barTucked ? "on" : "off"]) }
   function setTopbar(v) { topbarPref = v; barPeek = false; run([home + "/.local/bin/tablet-mode", "topbar", v]) }
@@ -845,7 +879,7 @@ Item {
   property string hidePref: "0"
   readonly property int railHideMs: Math.max(0, Number(hidePref.trim()) || 0) * 1000
   property bool railsShown: true
-  property real slide: railsShown ? 1 : 0          // 1: in place, 0: off the edge
+  property real slide: railsShown && !tuckedNow ? 1 : 0          // 1: in place, 0: off the edge
   Behavior on slide { NumberAnimation { duration: 260; easing.type: Easing.OutCubic } }
   // Whether the rails may slide away at all right now.
   readonly property bool railHideAllowed: noKeyboard && railHideMs > 0 && !listening && !busy && !settingsOpen && !drawerOpen && !powerOpen && !todayOpen
@@ -2485,7 +2519,7 @@ Item {
   }
 
   // ---------------------------------------------------------------- the rail
-  readonly property int railSize: 64
+  readonly property int railSize: compact ? 52 : 64
   readonly property int uprightBar: 132      // the bar along the bottom of an upright screen: two rows
   // Two rails when asked for and the screen is wide; upright, one bar.
   readonly property bool upright: Quickshell.screens.length > 0
@@ -2627,8 +2661,13 @@ Item {
 
       GridLayout {
         visible: !rail.upright
-        anchors.fill: parent
-        anchors.margins: 7
+        // Laid out at full size in a taller, wider space and drawn at
+        // railScale: one number makes every button on the rail smaller.
+        x: root.railPad; y: root.railPad
+        width: (parent.width - 2 * root.railPad) / root.railScale
+        height: (parent.height - 2 * root.railPad) / root.railScale
+        scale: root.railScale
+        transformOrigin: Item.TopLeft
         flow: rail.upright ? GridLayout.LeftToRight : GridLayout.TopToBottom
         // 8, and every button below the desktop arrow 50 tall, on both rails:
         // five buttons under "next" here and five under "previous" there, so
@@ -3268,8 +3307,11 @@ Item {
       }
 
       ColumnLayout {
-        anchors.fill: parent
-        anchors.margins: 7
+        x: root.railPad; y: root.railPad          // as the right rail's (see there)
+        width: (parent.width - 2 * root.railPad) / root.railScale
+        height: (parent.height - 2 * root.railPad) / root.railScale
+        scale: root.railScale
+        transformOrigin: Item.TopLeft
         spacing: 8                      // with the rockers at 84: thirteen controls fit the rail's height
 
         // LAID OUT FOR THE HAND THAT HOLDS IT. A 13-inch tablet has weight: you
@@ -4438,6 +4480,8 @@ Item {
                 { v: "scallop", l: "Scallop" }, { v: "flame", l: "Flame" }, { v: "saw", l: "Saw" }] },
             { key: "hide", title: "Slide away when idle", narrow: true, options: [
                 { v: "0", l: "Never" }, { v: "10", l: "10 s" }, { v: "30", l: "30 s" }, { v: "60", l: "1 min" }, { v: "300", l: "5 min" }] },
+            { key: "size", title: "Frame", options: [
+                { v: "roomy", l: "Roomy" }, { v: "compact", l: "Compact" }] },
             { key: "topbar", title: "Top bar", options: [
                 { v: "hide", l: "Tucked away" }, { v: "show", l: "Always there" }] },
             { key: "keyboard", title: "Keyboard", options: [
@@ -4453,6 +4497,7 @@ Item {
             readonly property string current: modelData.key === "hide" ? String(Math.round(root.railHideMs / 1000))
               : modelData.key === "keys" ? (["always", "off"].indexOf(root.keysPref.trim()) >= 0 ? root.keysPref.trim() : "auto")
               : modelData.key === "topbar" ? (root.topbarPref.trim() === "show" ? "show" : "hide")
+              : modelData.key === "size" ? (root.compact ? "compact" : "roomy")
               : modelData.key === "keyboard" ? (root.keyboardPref.trim() === "full" ? "full" : "split")
               : modelData.key === "buttons" ? (root.buttonShapes[root.buttonsPref.trim()] !== undefined ? root.buttonsPref.trim() : "auto")
               : modelData.key === "edge"
@@ -4480,6 +4525,7 @@ Item {
                   anchors.fill: parent
                   enabled: !parent.off
                   onClicked: {
+                    if (sw2.modelData.key === "size") root.setSize(parent.modelData.v)
                     if (sw2.modelData.key === "topbar") root.setTopbar(parent.modelData.v)
                     else if (sw2.modelData.key === "keyboard") root.setKeyboard(parent.modelData.v)
                     else if (sw2.modelData.key === "keys") root.setKeys(parent.modelData.v)

@@ -149,6 +149,10 @@ It appears with those apps and goes away with others (`tablet-mode keys auto`, t
 
 **The pager.** The desktops are numbered keys at the left end of the bottom band: tap one to go there, hold one to take the focused window there. The one you are on is lit and empty ones are faint. The rails keep a previous and a next arrow as well, for stepping without looking.
 
+**A smaller frame.** `tablet-mode size compact` (or Frame in the settings panel) narrows the rails from 64 px to 52, the band from 48 to 38 and the top bezel from 12 to 4: on a 1440x900 screen the windows go from 1312x840 to 1336x858. The rail's buttons shrink to 42 px; the band's keys stay as they are. `roomy` puts it back.
+
+**The frame, put away.** Four fingers up maximises a window; four fingers up again slides the rails and the band off the screen until four fingers down. The keyboard brings them back while it is open.
+
 **The top bar, tucked away.** With the desktops, the battery and the time in the bottom band, Omarchy's bar has little left to say on a tablet, so while the band is up it is hidden and its height goes back to the windows. The clock key in the band brings it back for half a minute (or until you tap the clock again) for Wi-Fi, Bluetooth, sound and the tray. `tablet-mode topbar show` keeps it there always; it returns by itself when a keyboard is attached.
 
 Next to the clock are a Wi-Fi key and a Bluetooth key, which open Omarchy's own panels without the bar. The meters take a tap too: the battery opens the power panel (power saver, balanced, performance), processor and memory the monitor panel.
