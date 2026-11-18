@@ -518,7 +518,17 @@ Item {
   property bool kbPinMode: false
   property bool kbPinLetters: false
   readonly property bool kbPin: kbLock && kbPinMode && !kbPinLetters
-  onKbLockChanged: kbPinLetters = false
+  onKbLockChanged: { kbPinLetters = false; kbPinTyped = 0 }
+  // A PIN of known length ("pin6" in the state file) goes in on its last
+  // digit, with no Enter: the pad counts what it has typed.
+  property int kbPinLen: 0
+  property int kbPinTyped: 0
+  Timer { id: kbPinEnter; interval: 120; onTriggered: root.sendKeys([28]) }
+  function kbPinCount(code) {
+    if (code === 14) kbPinTyped = Math.max(0, kbPinTyped - 1)
+    else if (code === 28) kbPinTyped = 0
+    else if (++kbPinTyped >= kbPinLen && kbPinLen > 0) { kbPinTyped = 0; kbPinEnter.restart() }
+  }
   readonly property var kbPad: [
     [{ l: "1", c: 2 }, { l: "2", c: 3 }, { l: "3", c: 4 }],
     [{ l: "4", c: 5 }, { l: "5", c: 6 }, { l: "6", c: 7 }],
@@ -571,6 +581,7 @@ Item {
     if (key.s || (key.letter && (kbShift || kbCaps))) codes.push(42)
     codes.push(key.c)
     sendKeys(codes)
+    if (kbPin) kbPinCount(key.c)
     if (!key.r) { kbShift = false; kbCtrl = false }             // one-shot modifiers are spent
   }
   function toggleKeyboard() {
@@ -589,7 +600,11 @@ Item {
     watchChanges: true
     printErrors: false
     onFileChanged: reload()
-    onLoaded: { var v = text().trim(); root.kbLock = v === "1" || v === "pin"; root.kbPinMode = v === "pin" }
+    onLoaded: {
+      var v = text().trim(), pin = v.indexOf("pin") === 0
+      root.kbLock = v === "1" || pin; root.kbPinMode = pin
+      root.kbPinLen = pin ? (parseInt(v.slice(3)) || 0) : 0
+    }
     onLoadFailed: { root.kbLock = false; root.kbPinMode = false }
   }
   FileView {

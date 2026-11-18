@@ -24,6 +24,10 @@ ok("the password turns it back on", tp.check(p, "482917", now=1300))
 late = 1200 + tp.MAX_AGE + 1
 ok("it expires after 24 hours", tp.state(p, now=late) == "needs-password" and not tp.check(p, "482917", now=late))
 ok("a stamp from the future is not trusted", tp.state(p, now=500) == "needs-password")
+import io, contextlib
+tp.getpass.getpass = lambda prompt="": "4829175"
+with contextlib.redirect_stderr(io.StringIO()): seven = tp.cmd_set({k: v + ".new" for k, v in p.items()})
+ok("a new PIN is six digits exactly", seven == 1 and not os.path.exists(p["pin"] + ".new"))
 ok("six digits at least, digits only", not tp.is_pin("12345") and not tp.is_pin("12345a") and tp.is_pin("123456"))
 stack = ["#%PAM-1.0\n",
          "auth       required                    pam_faillock.so preauth silent deny=10 unlock_time=120\n",

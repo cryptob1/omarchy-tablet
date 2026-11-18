@@ -4,7 +4,9 @@
 A tablet's password is typed on glass, many times a day. This lets the lock
 screen also take a short PIN, hedged the way a phone hedges it:
 
-  - six digits or more;
+  - six digits exactly, so the lock screen can take it the moment the sixth
+    is typed, with no Enter (a longer PIN set by an older version still
+    works, with Enter);
   - five wrong PINs and the PIN is off until the full password is used;
   - the PIN works only if the full password has unlocked this screen since
     the last restart, and within the last 24 hours;
@@ -147,9 +149,9 @@ def arm(p, now=None):
 
 
 def cmd_set(p):
-    first = getpass.getpass("New PIN (%d digits or more): " % MIN_DIGITS)
-    if not is_pin(first):
-        print("A PIN is %d to 16 digits, and nothing else." % MIN_DIGITS, file=sys.stderr)
+    first = getpass.getpass("New PIN (%d digits): " % MIN_DIGITS)
+    if not is_pin(first) or len(first) != MIN_DIGITS:
+        print("A PIN is %d digits, and nothing else." % MIN_DIGITS, file=sys.stderr)
         return 1
     if len(set(first)) == 1 or first in "01234567890123456789" or first in "98765432109876543210":
         print("That one is among the first anyone would try. Pick another.", file=sys.stderr)
@@ -158,7 +160,8 @@ def cmd_set(p):
         print("They differ. Nothing changed.", file=sys.stderr)
         return 1
     salt = os.urandom(16)
-    write(p["pin"], json.dumps({"salt": salt.hex(), "hash": digest(first, salt).hex(), "kdf": "scrypt", **SCRYPT}) + "\n")
+    write(p["pin"], json.dumps({"salt": salt.hex(), "hash": digest(first, salt).hex(), "kdf": "scrypt",
+                                **SCRYPT, "digits": len(first)}) + "\n")
     write(p["fails"], "0\n")
     print("PIN set. It works after the next unlock with your password, for %d hours at a time." % (MAX_AGE // 3600))
     if not installed():
@@ -268,6 +271,18 @@ def main(argv):
         return 0
     if cmd == "status":
         print(state(p))
+        return 0
+    if cmd == "digits":
+        # How long the PIN is, for the number pad to submit without Enter.
+        # Every PIN set by this version is the same length, so this tells
+        # nobody anything; an older PIN's length was never recorded: nothing.
+        try:
+            with open(p["pin"]) as f:
+                n = int(json.load(f).get("digits", 0))
+        except (OSError, ValueError, TypeError):
+            n = 0
+        if n == MIN_DIGITS:
+            print(n)
         return 0
     if cmd == "set":
         return cmd_set(p)

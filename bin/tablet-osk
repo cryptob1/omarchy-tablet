@@ -43,7 +43,8 @@ lock_show() {
   if [ "$(cat "$state/keyboard" 2>/dev/null)" != "full" ]; then
     # A number pad if the lock screen will take a PIN right now (bin/tablet-pin).
     local kind=1
-    [ "$(tablet-pin status 2>/dev/null)" = ready ] && kind=pin
+    # "pin6": and it is six digits long, so the pad needs no Enter.
+    [ "$(tablet-pin status 2>/dev/null)" = ready ] && kind="pin$(tablet-pin digits 2>/dev/null)"
     mkdir -p "$state"; echo "$kind" > "$state/lock-keyboard"
     for _ in 1 2 3 4 5 6 7 8; do
       hyprctl layers 2>/dev/null | grep -q "namespace: omarchy-tablet-keys" && return 0
@@ -64,7 +65,7 @@ lock_watch() {
   while locked; do
     sleep 1
     # Five wrong PINs: the pad gives way to the letters, for the password.
-    if [ "$(cat "$state/lock-keyboard" 2>/dev/null)" = pin ] && [ "$(tablet-pin status 2>/dev/null)" != ready ]; then
+    if [[ "$(cat "$state/lock-keyboard" 2>/dev/null)" == pin* ]] && [ "$(tablet-pin status 2>/dev/null)" != ready ]; then
       echo 1 > "$state/lock-keyboard"
     fi
     now=$(date +%s)
