@@ -332,7 +332,20 @@ Item {
   // through. A touch that began on the shield stays the shield's until it
   // lifts, so emptying it mid-touch does not hand the finger to the terminal.
   property var shieldRects: []
-  function shieldRect(i, k) { return i < shieldRects.length ? shieldRects[i][k] : 0 }
+  function shieldRect(i, k) { return !shieldPause && i < shieldRects.length ? shieldRects[i][k] : 0 }
+  // The rail's scroll strip scrolls with the mouse wheel, and the shield takes
+  // the wheel as it takes a finger: with the shield up over a terminal the
+  // strip scrolled nothing at all. So the strip lowers the shield while it is
+  // in use (and for a moment after, for the fling), and the pointer is aimed
+  // only once the shield is down, or it would still belong to the shield.
+  property bool shieldPause: false
+  Timer { id: shieldResume; interval: 900; onTriggered: root.shieldPause = false }
+  Timer { id: stripAimSoon; interval: 110; onTriggered: root.run([root.home + "/.local/bin/tablet-touch", "scroll-aim"]) }
+  function stripAim() { shieldPause = true; shieldResume.restart(); stripAimSoon.restart() }
+  function stripWheel(notches) {
+    shieldPause = true; shieldResume.restart()
+    Quickshell.execDetached(["ydotool", "mousemove", "--wheel", "-x", "0", "-y", String(-notches)])
+  }
   FileView {
     path: Quickshell.env("XDG_RUNTIME_DIR") + "/tablet-mode/shield"
     watchChanges: true
@@ -2710,12 +2723,12 @@ Item {
           Layout.fillHeight: !rail.upright
           Layout.fillWidth: rail.upright
           horizontal: rail.upright
-          onAim: root.run([root.home + "/.local/bin/tablet-touch", "scroll-aim"])
+          onAim: root.stripAim()
           // It is drawn as a wheel, so it turns like one: roll it DOWN and the
           // page scrolls down (the text moves up). The reverse of a finger on
           // the content itself, which drags the text with it; on a wheel that
           // felt backwards.
-          onWheel: (notches) => Quickshell.execDetached(["ydotool", "mousemove", "--wheel", "-x", "0", "-y", String(-notches)])
+          onWheel: (notches) => root.stripWheel(notches)
         }
 
         // Next desktop (hold: take the window along), level with "previous" on
@@ -2937,12 +2950,12 @@ Item {
 
               skin: root.skin
               corner: root.corner
-              onAim: root.run([root.home + "/.local/bin/tablet-touch", "scroll-aim"])
+              onAim: root.stripAim()
               // It is drawn as a wheel, so it turns like one: roll it DOWN and the
               // page scrolls down (the text moves up). The reverse of a finger on
               // the content itself, which drags the text with it; on a wheel that
               // felt backwards.
-              onWheel: (notches) => Quickshell.execDetached(["ydotool", "mousemove", "--wheel", "-x", "0", "-y", String(-notches)])
+              onWheel: (notches) => root.stripWheel(notches)
             }
           }
           Item {

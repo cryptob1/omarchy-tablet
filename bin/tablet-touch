@@ -210,6 +210,14 @@ def scroll_aim():
         hyprctl("dispatch", f"hl.dsp.cursor.move({{ x = {spot[0]}, y = {spot[1]} }})")
     else:
         park_pointer(active())
+    # A warp alone does not tell the window under the pointer that it is there
+    # (and after the terminal shield has just stepped aside, the pointer is
+    # still the shield's): it takes a real movement.
+    try:
+        subprocess.run(["ydotool", "mousemove", "-x", "1", "-y", "1"], stdout=subprocess.DEVNULL,
+                       stderr=subprocess.DEVNULL, timeout=2)
+    except (OSError, subprocess.SubprocessError):
+        pass
 
 
 def command_command(event):
