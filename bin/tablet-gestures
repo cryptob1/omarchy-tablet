@@ -371,6 +371,9 @@ def gesture(fingers, direction):
     return direction if direction in GESTURES.get(fingers, ()) else None
 
 
+DESK_MAX = 7   # keep in step with deskMax in shell/plugins/tablet.rail/Main.qml
+
+
 def hyprctl(*args):
     return subprocess.run(["hyprctl", *args], capture_output=True, text=True, timeout=3).stdout
 
@@ -398,7 +401,14 @@ def act(direction, fingers=3):
             return
         if direction in ("left", "right"):
             # Like the touchpad swipe: dragging the desktop left reveals the next one.
-            hyprctl("dispatch", f'hl.dsp.focus({{ workspace = "r{"+1" if direction == "left" else "-1"}" }})')
+            # Within the desktops the pager has keys for (DESK_MAX; the rail
+            # plugin's deskMax): Hyprland's "r+1" walks into empty desktops
+            # with no end, and windows ended up on desktop 13 with no key lit.
+            now = (json.loads(hyprctl("activeworkspace", "-j") or "{}")).get("id") or 1
+            step = 1 if direction == "left" else -1
+            target = max(1, min(max(DESK_MAX, now), now + step))
+            if target != now:
+                hyprctl("dispatch", f'hl.dsp.focus({{ workspace = "{target}" }})')
             return
         # The frame, tucked away: one step past maximised, and the first step
         # back (the shell reads this file; see TUCKED in the rail plugin).

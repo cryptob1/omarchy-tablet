@@ -475,11 +475,19 @@ Item {
     for (var i = 0; i < ws.length; i++) if (ws[i].id > 0) ids.push(ws[i].id)
     return ids
   }
+  // The pager has a key for desktops 1..deskMax, and the next / previous
+  // arrows (and three-finger swipes, bin/tablet-gestures) stop there. Hyprland's
+  // own "r+1" steps into empty desktops with no end, so a few swipes too many
+  // left windows on desktop 13 with no key lit. A desktop past deskMax reached
+  // some other way (Super+9) still gets its key, so the one you are on is lit.
+  readonly property int deskMax: 7
   readonly property int deskCount: {
     var top = Math.max(5, deskNow)
     for (var i = 0; i < deskUsed.length; i++) top = Math.max(top, deskUsed[i])
-    return Math.min(top, 7)
+    return Math.min(top, Math.max(deskMax, deskNow))
   }
+  // The desktop one step along, kept within 1..deskMax (or where you already are).
+  function wsStep(d) { return String(Math.max(1, Math.min(Math.max(deskMax, deskNow), deskNow + d))) }
   readonly property var keySets: ({
     terminal: [
       { l: "Esc", k: [1] }, { l: "Tab", k: [15] }, { l: "\u21e7Tab", k: [42, 15] }, { l: "Ctrl C", k: [29, 46] },
@@ -2796,8 +2804,8 @@ Item {
           glyph: "󰁔"
           heldGlyph: "󰖯"
           holdMs: root.carryMs
-          onTapped: root.wsTapped("r+1")
-          onHeld: root.wsHeld("r+1")
+          onTapped: root.wsTapped(root.wsStep(1))
+          onHeld: root.wsHeld(root.wsStep(1))
         }
 
         MicButton {
@@ -2862,8 +2870,8 @@ Item {
           glyph: "󰁍"
           heldGlyph: "󰖯"
           holdMs: root.carryMs
-          onTapped: root.wsTapped("r-1")
-          onHeld: root.wsHeld("r-1")
+          onTapped: root.wsTapped(root.wsStep(-1))
+          onHeld: root.wsHeld(root.wsStep(-1))
         }
 
         TouchButton {
@@ -3085,8 +3093,8 @@ Item {
               glyph: "󰁍"
               heldGlyph: "󰖯"
               holdMs: root.carryMs
-              onTapped: root.wsTapped("r-1")
-              onHeld: root.wsHeld("r-1")
+              onTapped: root.wsTapped(root.wsStep(-1))
+              onHeld: root.wsHeld(root.wsStep(-1))
             }
           }
           Item {
@@ -3190,8 +3198,8 @@ Item {
               glyph: "󰁔"
               heldGlyph: "󰖯"
               holdMs: root.carryMs
-              onTapped: root.wsTapped("r+1")
-              onHeld: root.wsHeld("r+1")
+              onTapped: root.wsTapped(root.wsStep(1))
+              onHeld: root.wsHeld(root.wsStep(1))
             }
           }
       }
@@ -3412,8 +3420,8 @@ Item {
           glyph: "󰁍"
           heldGlyph: "󰖯"
           holdMs: root.carryMs
-          onTapped: root.wsTapped("r-1")
-          onHeld: root.wsHeld("r-1")
+          onTapped: root.wsTapped(root.wsStep(-1))
+          onHeld: root.wsHeld(root.wsStep(-1))
         }
 
         // Under the left thumb, top to bottom: play, then the two window buttons
