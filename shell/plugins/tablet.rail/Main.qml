@@ -261,7 +261,45 @@ Item {
     return lum(deep) < 0.22 ? deep : Qt.darker(deep, 1.6)
   }
   // The frame: how far its inside corners sweep, and its edge line.
-  readonly property int frameRadius: 14
+  // Tunable so the frame's curves can follow the screen's own rounded corners:
+  // write a number of pixels to ~/.local/state/tablet-mode/frame-radius (live,
+  // no restart). 14 is the default; 0 gives square inside corners.
+  property int frameRadiusPref: 14
+  readonly property int frameRadius: Math.max(0, Math.min(140, frameRadiusPref))
+  FileView {
+    path: root.stateDir + "/frame-radius"
+    watchChanges: true
+    printErrors: false
+    onFileChanged: reload()
+    onLoaded: { var n = parseInt(text().trim()); root.frameRadiusPref = isNaN(n) ? 14 : n }
+    onLoadFailed: root.frameRadiusPref = 14
+  }
+  // The frame's OUTER corners. A panel with rounded corners clips the frame's
+  // square ones, so its outer border stops following the glass. Write a number
+  // of pixels to ~/.local/state/tablet-mode/outer-radius (live) to round them
+  // to match; 0 (the default) leaves them square. All four corners, in the
+  // closed two-rail frame. `outer-border` (px, default 2, 0 = none) is the
+  // light line drawn along the whole outer edge, round the corners too.
+  property int outerBorderPref: 2
+  readonly property int outerBorder: Math.max(0, Math.min(12, outerBorderPref))
+  FileView {
+    path: root.stateDir + "/outer-border"
+    watchChanges: true
+    printErrors: false
+    onFileChanged: reload()
+    onLoaded: { var n = parseInt(text().trim()); root.outerBorderPref = isNaN(n) ? 2 : n }
+    onLoadFailed: root.outerBorderPref = 2
+  }
+  property int outerRadiusPref: 0
+  readonly property int outerRadius: Math.max(0, Math.min(200, outerRadiusPref))
+  FileView {
+    path: root.stateDir + "/outer-radius"
+    watchChanges: true
+    printErrors: false
+    onFileChanged: reload()
+    onLoaded: { var n = parseInt(text().trim()); root.outerRadiusPref = isNaN(n) ? 0 : n }
+    onLoadFailed: root.outerRadiusPref = 0
+  }
   // The frame is CLOSED along the bottom by a thin bezel in the same shell: a
   // U of thick sides and a thin top reads as three strips, a closed ring reads
   // as one object with the screen set into it. It costs the windows this much
@@ -3601,6 +3639,170 @@ Item {
             GradientStop { position: 1.0; color: Qt.alpha("white", 0.0) }
           }
         }
+      }
+    }
+  }
+
+  // The two outer bottom corners: black corner pieces that give the frame's
+  // outside edge the curve of the screen (see outerRadius). Input passes
+  // straight through them.
+  PanelWindow {
+    id: cornerLeft
+    visible: root.outerRadius > 0 && root.framed
+    screen: Quickshell.screens.length > 0 ? Quickshell.screens[0] : null
+    color: "transparent"
+    WlrLayershell.namespace: "omarchy-tablet-corner"
+    WlrLayershell.layer: WlrLayer.Overlay
+    WlrLayershell.keyboardFocus: WlrKeyboardFocus.None
+    exclusionMode: ExclusionMode.Ignore
+    anchors { bottom: true; left: true }
+    implicitWidth: root.outerRadius
+    implicitHeight: root.outerRadius
+    mask: Region {}
+    Canvas {
+      anchors.fill: parent
+      property int rad: root.outerRadius
+      onRadChanged: requestPaint()
+      onWidthChanged: requestPaint()
+      onPaint: {
+        var c = getContext("2d"), r = width
+        c.reset()
+        if (r < 2) return
+        c.fillStyle = "black"
+        c.beginPath(); c.moveTo(0, r); c.lineTo(0, 0); c.arc(r, 0, r, Math.PI, Math.PI / 2, true); c.closePath()
+        c.fill()
+      }
+    }
+  }
+  PanelWindow {
+    id: cornerRight
+    visible: root.outerRadius > 0 && root.framed
+    screen: Quickshell.screens.length > 0 ? Quickshell.screens[0] : null
+    color: "transparent"
+    WlrLayershell.namespace: "omarchy-tablet-corner"
+    WlrLayershell.layer: WlrLayer.Overlay
+    WlrLayershell.keyboardFocus: WlrKeyboardFocus.None
+    exclusionMode: ExclusionMode.Ignore
+    anchors { bottom: true; right: true }
+    implicitWidth: root.outerRadius
+    implicitHeight: root.outerRadius
+    mask: Region {}
+    Canvas {
+      anchors.fill: parent
+      property int rad: root.outerRadius
+      onRadChanged: requestPaint()
+      onWidthChanged: requestPaint()
+      onPaint: {
+        var c = getContext("2d"), r = width
+        c.reset()
+        if (r < 2) return
+        c.translate(r, 0); c.scale(-1, 1)
+        c.fillStyle = "black"
+        c.beginPath(); c.moveTo(0, r); c.lineTo(0, 0); c.arc(r, 0, r, Math.PI, Math.PI / 2, true); c.closePath()
+        c.fill()
+      }
+    }
+  }
+
+  // The same two corners along the top edge.
+  PanelWindow {
+    id: cornerTopLeft
+    visible: root.outerRadius > 0 && root.framed
+    screen: Quickshell.screens.length > 0 ? Quickshell.screens[0] : null
+    color: "transparent"
+    WlrLayershell.namespace: "omarchy-tablet-corner"
+    WlrLayershell.layer: WlrLayer.Overlay
+    WlrLayershell.keyboardFocus: WlrKeyboardFocus.None
+    exclusionMode: ExclusionMode.Ignore
+    anchors { top: true; left: true }
+    implicitWidth: root.outerRadius
+    implicitHeight: root.outerRadius
+    mask: Region {}
+    Canvas {
+      anchors.fill: parent
+      property int rad: root.outerRadius
+      onRadChanged: requestPaint()
+      onWidthChanged: requestPaint()
+      onPaint: {
+        var c = getContext("2d"), r = width
+        c.reset()
+        if (r < 2) return
+        c.translate(0, r); c.scale(1, -1)
+        c.fillStyle = "black"
+        c.beginPath(); c.moveTo(0, r); c.lineTo(0, 0); c.arc(r, 0, r, Math.PI, Math.PI / 2, true); c.closePath()
+        c.fill()
+      }
+    }
+  }
+  PanelWindow {
+    id: cornerTopRight
+    visible: root.outerRadius > 0 && root.framed
+    screen: Quickshell.screens.length > 0 ? Quickshell.screens[0] : null
+    color: "transparent"
+    WlrLayershell.namespace: "omarchy-tablet-corner"
+    WlrLayershell.layer: WlrLayer.Overlay
+    WlrLayershell.keyboardFocus: WlrKeyboardFocus.None
+    exclusionMode: ExclusionMode.Ignore
+    anchors { top: true; right: true }
+    implicitWidth: root.outerRadius
+    implicitHeight: root.outerRadius
+    mask: Region {}
+    Canvas {
+      anchors.fill: parent
+      property int rad: root.outerRadius
+      onRadChanged: requestPaint()
+      onWidthChanged: requestPaint()
+      onPaint: {
+        var c = getContext("2d"), r = width
+        c.reset()
+        if (r < 2) return
+        c.translate(r, r); c.scale(-1, -1)
+        c.fillStyle = "black"
+        c.beginPath(); c.moveTo(0, r); c.lineTo(0, 0); c.arc(r, 0, r, Math.PI, Math.PI / 2, true); c.closePath()
+        c.fill()
+      }
+    }
+  }
+
+  // The light line along the frame's absolute outer edge, curving round the
+  // four corners with the same radius. Drawn last, over the corner pieces.
+  PanelWindow {
+    id: outerEdge
+    visible: root.outerRadius > 0 && root.outerBorder > 0 && root.framed
+    screen: Quickshell.screens.length > 0 ? Quickshell.screens[0] : null
+    color: "transparent"
+    WlrLayershell.namespace: "omarchy-tablet-edge"
+    WlrLayershell.layer: WlrLayer.Overlay
+    WlrLayershell.keyboardFocus: WlrKeyboardFocus.None
+    exclusionMode: ExclusionMode.Ignore
+    anchors { top: true; bottom: true; left: true; right: true }
+    mask: Region {}
+    Canvas {
+      anchors.fill: parent
+      property int rad: root.outerRadius
+      property int bw: root.outerBorder
+      onRadChanged: requestPaint()
+      onBwChanged: requestPaint()
+      onWidthChanged: requestPaint()
+      onHeightChanged: requestPaint()
+      onPaint: {
+        var c = getContext("2d")
+        c.reset()
+        if (width < 8 || height < 8) return
+        var h = bw / 2, x0 = h, y0 = h, x1 = width - h, y1 = height - h, q = Math.max(0.5, rad - h)
+        c.beginPath()
+        c.moveTo(x0 + q, y0)
+        c.lineTo(x1 - q, y0); c.arcTo(x1, y0, x1, y0 + q, q)
+        c.lineTo(x1, y1 - q); c.arcTo(x1, y1, x1 - q, y1, q)
+        c.lineTo(x0 + q, y1); c.arcTo(x0, y1, x0, y1 - q, q)
+        c.lineTo(x0, y0 + q); c.arcTo(x0, y0, x0 + q, y0, q)
+        c.closePath()
+        // A faint highlight, not a stripe: the frame is metal, and a bright
+        // white line along its straight top and bottom edges looked like a
+        // glitch (2026-11-19).
+        c.strokeStyle = "rgba(255,255,255,0.20)"
+        c.lineWidth = bw
+        c.stroke()
       }
     }
   }
