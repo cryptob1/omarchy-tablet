@@ -507,12 +507,50 @@ Item {
   // one you are on is lit, empty ones are faint. While the band is up the
   // rails carry no desktop arrows, which were easy to mistake for Back.
   readonly property bool pagerOn: barSkinned && !upright
-  readonly property int deskNow: Hyprland.focusedWorkspace !== null ? Hyprland.focusedWorkspace.id : 1
+  // THE SCREEN'S OWN DESKTOPS. Omarchy gives every monitor a block of ten
+  // (default/hypr/monitor-workspaces.lua): the first 1-10, the next 11-20, and
+  // Super+3 is the third of the focused monitor's block. The block is kept by
+  // monitor in ~/.local/state/omarchy/monitors/workspaces, which Omarchy's bar
+  // reads too. So the pager, the arrows and the swipes all count 1-10 within
+  // this screen's block (deskBase + n), not raw Hyprland ids: on a screen whose
+  // block is not the first, raw ids sent every key to another monitor's
+  // desktops and lit none.
+  readonly property int deskSlots: 10
+  property var deskBlocks: ({})
+  FileView {
+    path: (Quickshell.env("XDG_STATE_HOME") || root.home + "/.local/state") + "/omarchy/monitors/workspaces"
+    watchChanges: true
+    printErrors: false
+    onFileChanged: reload()
+    onLoaded: {
+      var next = {}, lines = String(text() || "").split("\n")
+      for (var i = 0; i < lines.length; i++) {
+        var f = lines[i].split("\t")
+        if (f.length >= 3 && f[1] !== "") next[f[1]] = parseInt(f[0], 10)
+      }
+      root.deskBlocks = next
+    }
+    onLoadFailed: root.deskBlocks = ({})
+  }
+  readonly property int deskFocusedId: Hyprland.focusedWorkspace !== null ? Hyprland.focusedWorkspace.id : 1
+  readonly property int deskBase: {
+    var name = Quickshell.screens.length > 0 ? Quickshell.screens[0].name : ""
+    var block = root.deskBlocks[name]
+    if (block === undefined || isNaN(block)) block = Math.max(0, Math.floor((deskFocusedId - 1) / deskSlots))
+    return block * deskSlots
+  }
+  // The desktop you are on, as its place in the screen's block (1-10).
+  readonly property int deskNow: deskFocusedId - deskBase
   readonly property var deskUsed: {
     var ids = [], ws = Hyprland.workspaces.values
-    for (var i = 0; i < ws.length; i++) if (ws[i].id > 0) ids.push(ws[i].id)
+    for (var i = 0; i < ws.length; i++) {
+      var n = ws[i].id - deskBase
+      if (n >= 1 && n <= deskSlots) ids.push(n)
+    }
     return ids
   }
+  // The Hyprland workspace for place n in the screen's block.
+  function deskId(n) { return String(deskBase + n) }
   // The pager has a key for desktops 1..deskMax, and the next / previous
   // arrows (and three-finger swipes, bin/tablet-gestures) stop there. Hyprland's
   // own "r+1" steps into empty desktops with no end, so a few swipes too many
@@ -524,8 +562,9 @@ Item {
     for (var i = 0; i < deskUsed.length; i++) top = Math.max(top, deskUsed[i])
     return Math.min(top, Math.max(deskMax, deskNow))
   }
-  // The desktop one step along, kept within 1..deskMax (or where you already are).
-  function wsStep(d) { return String(Math.max(1, Math.min(Math.max(deskMax, deskNow), deskNow + d))) }
+  // The desktop one step along, kept within 1..deskMax of the screen's block
+  // (or where you already are).
+  function wsStep(d) { return deskId(Math.max(1, Math.min(Math.max(deskMax, deskNow), deskNow + d))) }
   readonly property var keySets: ({
     terminal: [
       { l: "Esc", k: [1] }, { l: "Tab", k: [15] }, { l: "\u21e7Tab", k: [42, 15] }, { l: "Ctrl C", k: [29, 46] },
@@ -3865,8 +3904,8 @@ Item {
           faint: root.deskUsed.indexOf(index + 1) < 0
           holdMs: root.carryMs
           onPressedDown: root.click()
-          onHit: root.wsTapped(index + 1)
-          onHeld: root.wsHeld(index + 1)
+          onHit: root.wsTapped(root.deskId(index + 1))
+          onHeld: root.wsHeld(root.deskId(index + 1))
         }
       }
     }

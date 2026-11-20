@@ -372,6 +372,24 @@ def gesture(fingers, direction):
 
 
 DESK_MAX = 7   # keep in step with deskMax in shell/plugins/tablet.rail/Main.qml
+DESK_SLOTS = 10
+
+
+def desk_base(monitor, workspace_id):
+    """First workspace id of the monitor's block. Omarchy gives each monitor ten
+    (default/hypr/monitor-workspaces.lua) and keeps which in this file; until it
+    has, the block of the workspace on screen."""
+    path = os.path.join(os.environ.get("XDG_STATE_HOME") or os.path.expanduser("~/.local/state"),
+                        "omarchy", "monitors", "workspaces")
+    try:
+        with open(path) as f:
+            for line in f:
+                fields = line.rstrip("\n").split("\t")
+                if len(fields) >= 3 and fields[1] == monitor and fields[0].isdigit():
+                    return int(fields[0]) * DESK_SLOTS
+    except OSError:
+        pass
+    return max(0, (workspace_id - 1) // DESK_SLOTS) * DESK_SLOTS
 
 
 def hyprctl(*args):
@@ -404,11 +422,15 @@ def act(direction, fingers=3):
             # Within the desktops the pager has keys for (DESK_MAX; the rail
             # plugin's deskMax): Hyprland's "r+1" walks into empty desktops
             # with no end, and windows ended up on desktop 13 with no key lit.
-            now = (json.loads(hyprctl("activeworkspace", "-j") or "{}")).get("id") or 1
+            # Counted within the monitor's own block of ten (see desk_base).
+            active = json.loads(hyprctl("activeworkspace", "-j") or "{}")
+            now_id = active.get("id") or 1
+            base = desk_base(active.get("monitor") or "", now_id)
+            now = now_id - base
             step = 1 if direction == "left" else -1
             target = max(1, min(max(DESK_MAX, now), now + step))
             if target != now:
-                hyprctl("dispatch", f'hl.dsp.focus({{ workspace = "{target}" }})')
+                hyprctl("dispatch", f'hl.dsp.focus({{ workspace = "{base + target}" }})')
             return
         # The frame, tucked away: one step past maximised, and the first step
         # back (the shell reads this file; see TUCKED in the rail plugin).
